@@ -98,7 +98,7 @@ sub get_options {
     # TODO get ENV variables for postgres to set defaults
     my %o = (
         'dbusername' => "postgres", 
-        'dbport' => "5432",
+        'port' => 5432,
         'pgdump' => "/opt/pgsql/bin/pg_dump",
         'pgrestore' => "/opt/pgsql/bin/pg_restore",
         'ddlbase' => "./",
@@ -110,7 +110,7 @@ sub get_options {
         \%o,
         'ddlbase=s',
         'host=s',
-        'port=s',
+        'port|p=i',
         'dbname=s',
         'quiet!',
         'gettables!',
@@ -130,9 +130,7 @@ sub get_options {
         'V_file=s',
         'v=s',
         'v_file=s',
-        #'excludefunction=s',  #not sure if function arguement list can be given on cmdline
         'P_file=s',
-        #'includefunction=s',  #not sure if function arguement list can be given on cmdline
         'p_file=s',
         'O=s',
         'o=s',
@@ -216,7 +214,7 @@ sub validate_options {
 
 sub create_temp_dump {
     # add option for remote hostname
-    my $pgdumpcmd = "$O->{pgdump} -s -Fc -U $O->{dbusername} -p $O->{dbport} ";
+    my $pgdumpcmd = "$O->{pgdump} -s -Fc -U $O->{dbusername} -p $O->{port} ";
 
     if ($O->{'N'} || $O->{'N_file'}) {
         $pgdumpcmd .= "$excludeschema_dump ";
@@ -501,7 +499,7 @@ sub create_ddl_files {
         $list_file_contents = "$t->{id} $t->{type} $t->{schema} $t->{name} $t->{owner}\n";
         
         if ($t->{'type'} eq "TABLE") {
-            $dumpcmd = "$O->{pgdump} -U $O->{dbusername} -p $O->{dbport} -s -Fp -t$t->{schema}.$t->{name} $O->{dbname} > $fqfn.sql";
+            $dumpcmd = "$O->{pgdump} -U $O->{dbusername} -p $O->{port} -s -Fp -t$t->{schema}.$t->{name} $O->{dbname} > $fqfn.sql";
             system $dumpcmd;
         } else {
             # TODO this is a mess but, amazingly, it works. try and tidy up if possible.
