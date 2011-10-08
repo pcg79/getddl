@@ -1,23 +1,4 @@
-4. die unless GetOptions() - I know that GetOptions will print
-something, but it would be good to provide your own die message.
 
-5. No support for --help option (for solution for #4 and #5, please take
-a look at pgtreats/tools/pg_bloat_report.pl and its method
-show_help_and_die();
-
-6. Please don't mix normal code with function definitions.
-You got that mostly right with the exception of:
-if ($DO_SVN) {
-····
-}
-after sub svn_check {} and before sub files_to_delete {}
-This makes reading code more complicated (you always have to check whether
-there is something else afterwards.
-
-My usual suggestion is to put
-exit;
-before all sub definitions.
-this makes it obvious that there is no more "base code" below.
 
 7. I suggest you use tools like "perltidy" for code formatting (it's on cpan). my .perltidyrc looks like:
 --backup-and-modify-in-place
@@ -65,8 +46,6 @@ die
    'T_file=s'   => \$excludetable_file,
 you can specify it using | operator:
    'T_file|T=s' => \$excludetable_file,
-
-9. In mail you mentioned --port option, which doesn't seem to be implemented
 
 10. Please remember that all of pg programs use environment variables,
 so it would be good if you would use them. This is simpler than it might
@@ -148,7 +127,8 @@ push @x, {
 22. in build_object_lists() you're parsing output of pg_restore -l.
    in the parse code, you assume that object type is always /\S+/,
    which is not true - for example: FK CONSTRAINT
-   #NOTE: Search for any combination of capital letters and spaces?
+   #NOTE: Search for any combination of capital letters and spaces? 
+   # Make list of known types and match on them?
 
 23. Application as it is now does not delete from disk files that
 represent objects that no longer exist.

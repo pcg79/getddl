@@ -84,6 +84,10 @@ if ($O->{sqldump}) {
     copy_sql_dump();
 }
 
+if ($O->{'dosvn'}) {
+    
+}
+
 print "Cleaning up...\n";
 cleanup();
 
@@ -97,7 +101,7 @@ exit;
 sub get_options {
     # TODO get ENV variables for postgres to set defaults
     my %o = (
-        'dbusername' => "postgres", 
+        'username' => "postgres", 
         'port' => 5432,
         'pgdump' => "/opt/pgsql/bin/pg_dump",
         'pgrestore' => "/opt/pgsql/bin/pg_restore",
@@ -109,9 +113,11 @@ sub get_options {
     show_help_and_die() unless GetOptions(
         \%o,
         'ddlbase=s',
-        'host=s',
+        'username|U',
+        'host|h=s',
+        'hostname=s',
         'port|p=i',
-        'dbname=s',
+        'dbname|d=s',
         'quiet!',
         'gettables!',
         'getviews!',
@@ -189,8 +195,8 @@ sub validate_options {
      
     my $real_server_name=`hostname`;
     my $customhost;
-    if ($O->{'host'}) {
-        $customhost = $O->{'host'};
+    if ($O->{'hostname'}) {
+        $customhost = $O->{'hostname'};
     } else {
         $customhost = chomp($real_server_name);
     }
@@ -214,7 +220,7 @@ sub validate_options {
 
 sub create_temp_dump {
     # add option for remote hostname
-    my $pgdumpcmd = "$O->{pgdump} -s -Fc -U $O->{dbusername} -p $O->{port} ";
+    my $pgdumpcmd = "$O->{pgdump} -s -Fc -U $O->{username} -p $O->{port} ";
 
     if ($O->{'N'} || $O->{'N_file'}) {
         $pgdumpcmd .= "$excludeschema_dump ";
@@ -499,7 +505,7 @@ sub create_ddl_files {
         $list_file_contents = "$t->{id} $t->{type} $t->{schema} $t->{name} $t->{owner}\n";
         
         if ($t->{'type'} eq "TABLE") {
-            $dumpcmd = "$O->{pgdump} -U $O->{dbusername} -p $O->{port} -s -Fp -t$t->{schema}.$t->{name} $O->{dbname} > $fqfn.sql";
+            $dumpcmd = "$O->{pgdump} -U $O->{username} -p $O->{port} -s -Fp -t$t->{schema}.$t->{name} $O->{dbname} > $fqfn.sql";
             system $dumpcmd;
         } else {
             # TODO this is a mess but, amazingly, it works. try and tidy up if possible.
@@ -572,7 +578,9 @@ sub cleanup {
 }
 
 
-# TODO From old getddl. Redo to read output of svn status on basedir.
+# From old getddl.
+# TODO: Do svn status on folder and read that output instead of comparing each individual file
+# Match on M, A, D, ? statuses for each file and act appropriately
 sub svn_check {
     my (%args) = @_;
     my $fn = create_dirs($args{destdir});
@@ -593,15 +601,6 @@ sub svn_check {
     }
 }
     
-
-
-
-# TODO: Do svn status on folder and read that output instead of comparing each individual file
-# Match on M, A, D, ? statuses for each file and act appropriately
-if ($O->{'dosvn'}) {
-    
-}
-
 # TODO This is the old delete sub with the new array lists added. Most likely needs fixing
 # TODO Also needs to account for sqldump
 # Get a list of the files on disk to remove from disk.
@@ -669,19 +668,39 @@ sub show_help_and_die {
  	
  	Options:
         [ database connection ]
-        --host                  (-h) : database server host or socket directory
-        --port                  (-p) : database server port
-        --user                  (-U) : database user name
-        --dbname                (-d) : database name to connect to
+        --host          (-h) : database server host or socket directory
+        --port          (-p) : database server port
+        --username      (-U) : database user name
+        --dbname        (-d) : database name to connect to
+        
+        [ directories ]
+        --ddlbase       : base directory for ddl export
+        --hostname      : hostname of the database server; used as directory name under --ddlbase
+        
+        [ filters ]
+        --gettables     : get table ddl export
+        --getviews      : get view ddl export
+        --getfuncs      : get function ddl export
+        --getall        : gets all tables, views and functions. Shortcut to having to set all 3 of the above.
+        --N             : csv list of schemas to EXCLUDE
+        --N_file        : path to a file listing schemas to exclude. separate by newline
+        --n             : csv list of schemas to INCLUDE
+        --n_file        : path to a file listing schemas to include. separate by newline
+        --T             : csv list of tables to EXCLUDE. Schema name may be required (same for all table options)
+        --T_file        : path to file listing tables to exclude. separate by newline
+        --t             : csv list of tables to INCLUDE. Only these tables will be exported.
+        --t_file        : path to file listing tables to include. separate by newline
 
         [ other ]
-        
-        --help                  (-?) : show this help page
+        --sqldump  also generate a pg_dump file. Will only contain schemas and tables designated by original options.
+        --help              (-?) : show this help page
  	
  	Defaults:
-        --exclude-schema   '^(pg_.*|information_schema)\$'
- 	   
- 	
+        --hostname          result of running 'hostname' command
+        --port              5432
+        --username          currently 'postgres'. will be user running getddl 
+        --ddlbase           ./  (directory getddl is run from)
+         	
  	Notes:
  	    
 _EOH_
