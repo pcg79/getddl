@@ -1,0 +1,181 @@
+4. die unless GetOptions() - I know that GetOptions will print
+something, but it would be good to provide your own die message.
+
+5. No support for --help option (for solution for #4 and #5, please take
+a look at pgtreats/tools/pg_bloat_report.pl and its method
+show_help_and_die();
+
+6. Please don't mix normal code with function definitions.
+You got that mostly right with the exception of:
+if ($DO_SVN) {
+····
+}
+after sub svn_check {} and before sub files_to_delete {}
+This makes reading code more complicated (you always have to check whether
+there is something else afterwards.
+
+My usual suggestion is to put
+exit;
+before all sub definitions.
+this makes it obvious that there is no more "base code" below.
+
+7. I suggest you use tools like "perltidy" for code formatting (it's on cpan). my .perltidyrc looks like:
+--backup-and-modify-in-place
+--backup-file-extension=beforeTidy
+--block-brace-tightness=0
+--brace-tightness=0
+--closing-token-indentation=1
+--continuation-indentation=4
+--indent-columns=4
+--maximum-line-length=195
+--nocuddled-else
+--noopening-brace-on-new-line
+--nooutdent-labels
+--paren-tightness=0
+--square-bracket-tightness=0
+--vertical-tightness=0
+--vertical-tightness-closing=0
+--break-at-old-comma-breakpoints
+
+The benefit of this is that it makes code consistently formatted, and a
+bit easier on eyes.
+For example, this:
+die unless GetOptions(
+   'ddlbase=s' => \$DDL_BASE,
+   'host=s' => \$host,
+   'dbname=s' => \$dbname,
+   'quiet!' => \$QUIET,
+   'gettables!' => \$GET_TABLES,
+   'getviews!' => \$GET_VIEWS,
+   'getfuncs!' => \$GET_FUNCS,
+
+becomes:
+die
+   unless GetOptions(
+   'ddlbase=s'  => \$DDL_BASE,
+   'host=s'     => \$host,
+   'dbname=s'   => \$dbname,
+   'quiet!'     => \$QUIET,
+   'gettables!' => \$GET_TABLES,
+   'getviews!'  => \$GET_VIEWS,
+   'getfuncs!'  => \$GET_FUNCS,
+
+8. Instead of specifying 2 parameters like:
+   'T=s'        => \$excludetable,
+   'T_file=s'   => \$excludetable_file,
+you can specify it using | operator:
+   'T_file|T=s' => \$excludetable_file,
+
+9. In mail you mentioned --port option, which doesn't seem to be implemented
+
+10. Please remember that all of pg programs use environment variables,
+so it would be good if you would use them. This is simpler than it might
+look - instead of passing elaborate --.... options to pg_dump just set
+appropriate PG* env variables if user provided given switch.
+
+11. When providing options that are basically the same as in
+pg_dump/psql - please make it possible to use also shortcuts, and make
+the options the same as in psql/pg_dump.
+I.e. when I use:
+psql -U ... -d ... -h ... -p ...
+please make sure that your tool will also understand the same options
+
+12. requiring $dbname seems excessive - psql nor pg_dump do not require
+it.
+
+13. This is the biggest gripe so far - you defined *A LOT* of global
+variables.
+Global variables are bad. Lots of global variables is even worse.
+Consider using single global variable - hash - for config, and using it
+to set values. This works like this:
+
+our %cfg;
+die ".." unless GetOptions(
+   \%cfg,
+   qw(
+       host|h=s
+       port|p=i
+       ...
+   )
+);
+
+This is of course only example look.
+Another approach (one that I like much better) is to use OO perl, and
+use $self (object itself) as %cfg.
+
+14. Instead of using `hostname` - you can use module Sys::Hostname -
+generally, when you have ` character in your application it's most
+likely a bug or security vulnerability.
+
+15. $basedir = "$DDL_BASE/$curhost/$dbname";
+This works. But consider using File::Spec->catfile or ->catdir - it's
+just better, more portable approach.
+
+16. my $dmp_tmp_file = "/tmp/pgdump" . ( time ) . ".$$";
+Instead of hardcoding path to /tmp please use File::Temp module
+
+17. I think that if you are providing default/hardcoded "paths" to
+programs, they should be like "$svn = 'svn'" - i.e. without path, so
+that environment's PATH will be used.
+
+18. please do not use globs for filehandles, like:
+open( FILE, '>', ...);
+these are global, and will bite you sooner or later.
+use normal private variables, like:
+open my $fh, '>', ....
+
+19. always use 3-parameter open() calls, not 2:
+open SCHEMAFILE, $excludeschema_file ...
+if you just want to read it, use:
+open my $out, '>', $excludeschema_file;
+
+20. push @tablelist, { %table_h };
+this construction, can be better written as:
+push @tablelist, \%table_h;
+it will make the push without copying content of %table_h.
+
+21. When you declare hash just to add it to array in next line, and then
+discard, like:
+if () {
+my %x = ( .... );
+push @a, \%x
+}
+you can do it simply by:
+push @x, {
+   ....
+};
+
+22. in build_object_lists() you're parsing output of pg_restore -l.
+   in the parse code, you assume that object type is always /\S+/,
+   which is not true - for example: FK CONSTRAINT
+   #NOTE: Search for any combination of capital letters and spaces?
+
+23. Application as it is now does not delete from disk files that
+represent objects that no longer exist.
+I.e. create table, make getdll, drop the table and make getddl again -
+the file for this table will still be there on disk.
+
+24. =$ perl ../getddl.pl --dbname depesz --getall
+Creating temp dump...
+pg_dump  -s -Fc -U postgres -p 5920  depesz > /tmp/pgdump1318008579.30788
+Building object lists...
+Use of uninitialized value $objtype in string eq at ../getddl.pl line 416.
+Use of uninitialized value $objtype in string eq at ../getddl.pl line 427.
+Use of uninitialized value $objtype in string eq at ../getddl.pl line 438.
+Use of uninitialized value $objtype in string eq at ../getddl.pl line 449.
+
+25. my $count;
+   for ( $count = 0 ; $count < scalar( @list ) ; $count++ ) {
+       $excludeschema_dump .= "-N" . $list[ $count ] . " ";
+   }
+There is no need to declare count outside of for if you're not going to
+use it outside of for, so you could:
+for ( my $count = 0; ... )
+But, more importantly - I found that usage of c-style for loops (for (
+... ; ... ; ... ) ) is extreme rarity.
+above loop can be simply written as:
+$excludeschema_dump .= "-N" . $_ . " " for @list;
+or if you don't like reverse notation:
+for my $schema ( @list ) {
+   $excludeschema_dump .= "-N" . $schema . " ";
+}
