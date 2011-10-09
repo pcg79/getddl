@@ -1,5 +1,5 @@
 Order of PG Restore -l for table/view
-(TABLE -> ACL) -> (VIEW -> ACL) -> CONSTRAINT -> INDEX -> RULE -> TRIGGER
+((TABLE -> ACL) -> (VIEW -> ACL)) -> CONSTRAINT -> INDEX -> RULE -> TRIGGER
 
 Example:
 /opt/OMNIperl/bin/perl getddl.pl --hostname=core-0-5 --ddlbase=/home/keith/ddl --getall --dbname=pgods --sqldump --n=keith

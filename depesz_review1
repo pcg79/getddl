@@ -18,28 +18,6 @@
 --vertical-tightness-closing=0
 --break-at-old-comma-breakpoints
 
-The benefit of this is that it makes code consistently formatted, and a
-bit easier on eyes.
-For example, this:
-die unless GetOptions(
-   'ddlbase=s' => \$DDL_BASE,
-   'host=s' => \$host,
-   'dbname=s' => \$dbname,
-   'quiet!' => \$QUIET,
-   'gettables!' => \$GET_TABLES,
-   'getviews!' => \$GET_VIEWS,
-   'getfuncs!' => \$GET_FUNCS,
-
-becomes:
-die
-   unless GetOptions(
-   'ddlbase=s'  => \$DDL_BASE,
-   'host=s'     => \$host,
-   'dbname=s'   => \$dbname,
-   'quiet!'     => \$QUIET,
-   'gettables!' => \$GET_TABLES,
-   'getviews!'  => \$GET_VIEWS,
-   'getfuncs!'  => \$GET_FUNCS,
 
 8. Instead of specifying 2 parameters like:
    'T=s'        => \$excludetable,
@@ -90,32 +68,12 @@ just better, more portable approach.
 programs, they should be like "$svn = 'svn'" - i.e. without path, so
 that environment's PATH will be used.
 
-18. please do not use globs for filehandles, like:
-open( FILE, '>', ...);
-these are global, and will bite you sooner or later.
-use normal private variables, like:
-open my $fh, '>', ....
-
-19. always use 3-parameter open() calls, not 2:
-open SCHEMAFILE, $excludeschema_file ...
-if you just want to read it, use:
-open my $out, '>', $excludeschema_file;
 
 20. push @tablelist, { %table_h };
 this construction, can be better written as:
 push @tablelist, \%table_h;
 it will make the push without copying content of %table_h.
 
-21. When you declare hash just to add it to array in next line, and then
-discard, like:
-if () {
-my %x = ( .... );
-push @a, \%x
-}
-you can do it simply by:
-push @x, {
-   ....
-};
 
 22. in build_object_lists() you're parsing output of pg_restore -l.
    in the parse code, you assume that object type is always /\S+/,
@@ -127,6 +85,7 @@ push @x, {
 represent objects that no longer exist.
 I.e. create table, make getdll, drop the table and make getddl again -
 the file for this table will still be there on disk.
+# NOTE: In planning. Old version let svn take care of this
 
 24. =$ perl ../getddl.pl --dbname depesz --getall
 Creating temp dump...

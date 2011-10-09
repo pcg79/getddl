@@ -28,7 +28,7 @@ my $svnuser = "--username postgres --password #####";
 #### end manual settings
 
 
-my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddlXXXXXXX', SUFFIX => 'tmp');
+my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddlXXXXXXX', SUFFIX => '.tmp');
 
 my ($excludeschema, $excludeschema_file, $excludeschema_dump) = ("", "", "");
 my ($includeschema, $includeschema_file, $includeschema_dump) = ("", "", "");
@@ -199,7 +199,7 @@ sub set_config {
         print "Building exclude lists...\n";
         build_excludes();
     }
-    if ($O->{'n'} || $O->{'N_file'} || $O->{'t'} || $O->{'t_file'} || 
+    if ($O->{'n'} || $O->{'n_file'} || $O->{'t'} || $O->{'t_file'} || 
             $O->{'v'} || $O->{'v_file'} || $O->{'p_file'}) {
         print "Building include lists...\n";
         build_includes();
@@ -231,6 +231,7 @@ sub create_temp_dump {
 
 sub build_excludes {
     my @list;
+    my $fh;
     if(defined($O->{'N'}) && $O->{'N'} =~ /,/) {
         @list = split(',', $O->{'N'});
         $excludeschema_dump .= "-N".$_." " for @list;
@@ -258,53 +259,54 @@ sub build_excludes {
      }
     
     if ($O->{'N_file'}) {
-        open SCHEMAFILE, $O->{'N_file'} or die_cleanup("Cannot open exclude file for reading [$O->{N_file}]: $!");
-        while(<SCHEMAFILE>) {
+        open $fh, "<", $O->{'N_file'} or die_cleanup("Cannot open exclude file for reading [$O->{N_file}]: $!");
+        while(<$fh>) {
             chomp;
             $excludeschema_dump .= "-N".$_." ";
         }
-        close SCHEMAFILE;
+        close $fh;
     }
     
     if ($O->{'T_file'}) {
-        open TABLEFILE, $O->{'T_file'} or die_cleanup("Cannot open exclude file for reading [$O->{T_file}]: $!");
-        while(<TABLEFILE>) {
+        open $fh, "<", $O->{'T_file'} or die_cleanup("Cannot open exclude file for reading [$O->{T_file}]: $!");
+        while(<$fh>) {
             chomp;
             $excludetable_dump .= "-T".$_." ";
         }
-        close TABLEFILE;
+        close $fh;
     }
     
     if ($O->{'V_file'}) {
-        open VIEWFILE, $O->{'V_file'} or die_cleanup("Cannot open exclude file for reading [$O->{V_file}]: $!");
-        while(<VIEWFILE>) {
+        open $fh, "<", $O->{'V_file'} or die_cleanup("Cannot open exclude file for reading [$O->{V_file}]: $!");
+        while(<$fh>) {
             chomp;
             push @excludeview, $_;
         }
-        close VIEWFILE;
+        close $fh;
     }
     
     if ($O->{'P_file'}) {
-        open FUNCTIONFILE, $O->{'P_file'} or die_cleanup("Cannot open exclude file for reading [$O->{P_file}]: $!");
-        while(<FUNCTIONFILE>) {
+        open $fh, "<", $O->{'P_file'} or die_cleanup("Cannot open exclude file for reading [$O->{P_file}]: $!");
+        while(<$fh>) {
             chomp;
             push @excludefunction, $_;
         }
-        close FUNCTIONFILE;
+        close $fh;
     }
     
     if ($O->{'O_file'}) {
-        open OWNERFILE, $O->{'O_file'} or die_cleanup("Cannot open exclude file for reading [$O->{O_file}]: $!");
-        while (<OWNERFILE>) {
+        open $fh, "<", $O->{'O_file'} or die_cleanup("Cannot open exclude file for reading [$O->{O_file}]: $!");
+        while (<$fh>) {
             chomp;
             push @excludeowner, $_;
         }
-        close OWNERFILE;
+        close $fh;
     }
 }
 
 sub build_includes {
     my @list;
+    my $fh;
     if (defined($O->{'n'}) && $O->{'n'} =~ /,/) {
         @list = split(',', $O->{'n'});
         $includeschema_dump .= "-n".$_." " for @list;
@@ -332,48 +334,48 @@ sub build_includes {
     }
     
     if ($O->{'n_file'}) {
-        open SCHEMAFILE, $O->{'n_file'} or die_cleanup("Cannot open include file for reading [$O->{n_file}]: $!");
-        while(<SCHEMAFILE>) {
+        open $fh, "<", $O->{'n_file'} or die_cleanup("Cannot open include file for reading [$O->{n_file}]: $!");
+        while(<$fh>) {
             chomp;
             $includeschema_dump .= "-n".$_." ";
         }
-        close SCHEMAFILE;
+        close $fh;
     }
     
     if ($O->{'t_file'}) {
-        open TABLEFILE, $O->{'t_file'} or die_cleanup("Cannot open include file for reading [$O->{t_file}]: $!");
-        while(<TABLEFILE>) {
+        open $fh, "<", $O->{'t_file'} or die_cleanup("Cannot open include file for reading [$O->{t_file}]: $!");
+        while(<$fh>) {
             chomp;
             $includetable_dump .= "-t".$_." ";
         }
-        close TABLEFILE;
+        close $fh;
     }
     
     if ($O->{'v_file'}) {
-        open VIEWFILE, $O->{'v_file'} or die_cleanup("Cannot open include file for reading [$O->{v_file}]: $!");
-        while(<VIEWFILE>) {
+        open $fh, "<", $O->{'v_file'} or die_cleanup("Cannot open include file for reading [$O->{v_file}]: $!");
+        while(<$fh>) {
             chomp;
             push @includeview, $_;
         }
-        close VIEWFILE;
+        close $fh;
     }
     
     if ($O->{'p_file'}) {
-        open FUNCTIONFILE, $O->{'p_file'} or die_cleanup("Cannot open include file for reading [$O->{p_file}]: $!");
-        while(<FUNCTIONFILE>) {
+        open $fh, "<", $O->{'p_file'} or die_cleanup("Cannot open include file for reading [$O->{p_file}]: $!");
+        while(<$fh>) {
             chomp;
             push @includefunction, $_;
         }
-        close FUNCTIONFILE;
+        close $fh;
     }
     
     if ($O->{'o_file'}) {
-        open OWNERFILE, $O->{'o_file'} or die_cleanup("Cannot open include file for reading [$O->{o_file}]: $!");
-        while(<OWNERFILE>) {
+        open $fh, "<", $O->{'o_file'} or die_cleanup("Cannot open include file for reading [$O->{o_file}]: $!");
+        while(<$fh>) {
             chomp;
             push @includeowner, $_;
         }
-        close OWNERFILE;
+        close $fh;
     }
 }
 
@@ -462,7 +464,7 @@ sub create_ddl_files {
     my $destdir = $_[1];
     my ($restorecmd, $dumpcmd, $fqfn, $funcname);
     my $fulldestdir = create_dirs($destdir);
-    my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddlXXXXXXXX', SUFFIX => 'tmp');
+    my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddlXXXXXXXX', SUFFIX => '.tmp');
     
     my $list_file_contents = "";
         
@@ -667,7 +669,7 @@ sub show_help_and_die {
         --help          (-?) : show this help page
  	
  	Defaults:
-        --hostname          result of running 'hostname' command
+        --hostname          result of running Sys::Hostname
         --port              5432
         --username          currently 'postgres'. will be user running getddl 
         --ddlbase           '.'  (directory getddl is run from)
