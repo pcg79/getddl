@@ -14,6 +14,7 @@ use DirHandle;
 use English qw( -no_match_vars);
 use File::Copy;
 use File::Path 'mkpath';
+use File::Spec;
 use File::Temp;
 use Getopt::Long qw( :config no_ignore_case );
 use Sys::Hostname;
@@ -30,23 +31,18 @@ my $svnuser = "--username postgres --password #####";
 
 my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddlXXXXXXX', SUFFIX => '.tmp');
 
-my ($excludeschema, $excludeschema_file, $excludeschema_dump) = ("", "", "");
-my ($includeschema, $includeschema_file, $includeschema_dump) = ("", "", "");
-my ($excludetable, $excludetable_file, $excludetable_dump) = ("", "", "");
-my ($includetable, $includetable_file, $includetable_dump) = ("", "", "");
-
+my ($excludeschema_dump, $includeschema_dump, $excludetable_dump, $includetable_dump) = ("","","","");
 my (@includeview, @excludeview);
-
 my (@includefunction, @excludefunction);
-
 my (@includeowner, @excludeowner);
 my (@tablelist, @viewlist, @functionlist, @acl_list);
 
-my $svn = '/opt/omni/bin/svn';
-my $commit_msg = 'Pg ddl updates';
-my $do_svn_del = 0;
-my (@to_commit, @to_add);
-my $commit_msg_fn = "";
+# For future svn stuff
+#my $svn = '/opt/omni/bin/svn';
+#my $commit_msg = 'Pg ddl updates';
+#my $do_svn_del = 0;
+#my (@to_commit, @to_add);
+#my $commit_msg_fn = "";
 
 
 ################ Run main program subroutines
@@ -191,7 +187,8 @@ sub set_config {
     } else {
         chomp ($customhost = $real_server_name);
     }
-    $O->{'basedir'} = "$O->{ddlbase}/$customhost/$O->{dbname}";
+    #$O->{'basedir'} = "$O->{ddlbase}/$customhost/$O->{dbname}";
+    $O->{'basedir'} = File::Spec->catdir($O->{ddlbase}, $customhost, $O->{dbname});
 
 
     if ($O->{'N'} || $O->{'N_file'} || $O->{'T'} || $O->{'T_file'} || 
@@ -446,7 +443,8 @@ sub build_object_lists {
 sub create_dirs {
     my $newdir = shift @_;
     
-    my $destdir = "$O->{basedir}/$newdir";
+    #my $destdir = "$O->{basedir}/$newdir";
+    my $destdir = File::Spec->catdir($O->{'basedir'}, $newdir);
     if (!-e $destdir) {
        eval { mkpath($destdir) };
        if ($@) {

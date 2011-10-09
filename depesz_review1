@@ -18,13 +18,6 @@
 --vertical-tightness-closing=0
 --break-at-old-comma-breakpoints
 
-
-8. Instead of specifying 2 parameters like:
-   'T=s'        => \$excludetable,
-   'T_file=s'   => \$excludetable_file,
-you can specify it using | operator:
-   'T_file|T=s' => \$excludetable_file,
-
 10. Please remember that all of pg programs use environment variables,
 so it would be good if you would use them. This is simpler than it might
 look - instead of passing elaborate --.... options to pg_dump just set
@@ -59,10 +52,6 @@ die ".." unless GetOptions(
 This is of course only example look.
 Another approach (one that I like much better) is to use OO perl, and
 use $self (object itself) as %cfg.
-
-15. $basedir = "$DDL_BASE/$curhost/$dbname";
-This works. But consider using File::Spec->catfile or ->catdir - it's
-just better, more portable approach.
 
 17. I think that if you are providing default/hardcoded "paths" to
 programs, they should be like "$svn = 'svn'" - i.e. without path, so
