@@ -12,16 +12,14 @@ use warnings;
 
 use DirHandle;
 use English qw( -no_match_vars);
-use File::Path 'mkpath';
 use File::Copy;
+use File::Path 'mkpath';
+use File::Temp;
 use Getopt::Long qw( :config no_ignore_case );
 use Sys::Hostname;
 
 #### must be manually set. no cmdl options
-#my $dbusername = 'postgres';
-#Note: must use .pgpass if password is required or trusted user
-#my $dbport = "5432";
-# Set if using svn
+
 my $svnuser = "--username postgres --password #####";
 
 # TODO Turn into cmdl option
@@ -29,25 +27,18 @@ my $svnuser = "--username postgres --password #####";
 #my $pgrestore = "/opt/pgsql/bin/pg_restore ";
 #### end manual settings
 
-#my $host = "";
-#my ($DO_SVN, $QUIET, $DDL_BASE) = (0, 0, './');
-#my ($GET_TABLES, $GET_FUNCS, $GET_VIEWS, $SQL_DUMP, $GET_ALL) = (0, 0, 0, 0, 0);
-#my ($DSN, $basedir, $dbname, $dbh);
-my $dmp_tmp_file = "/tmp/pgdump".(time).".$$";
 
-my $tmp_ddl_file = "/tmp/pgdump_ddl".(time).".$$";
+my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddlXXXXXXX', SUFFIX => 'tmp');
+
 my ($excludeschema, $excludeschema_file, $excludeschema_dump) = ("", "", "");
 my ($includeschema, $includeschema_file, $includeschema_dump) = ("", "", "");
 my ($excludetable, $excludetable_file, $excludetable_dump) = ("", "", "");
 my ($includetable, $includetable_file, $includetable_dump) = ("", "", "");
-#my ($excludeview, $excludeview_file) = ("", "");
-#my ($includeview, $includeview_file) = ("", "");
+
 my (@includeview, @excludeview);
-#my ($excludefunction, $excludefunction_file) = ("", "");
-#my ($includefunction, $includefunction_file) = ("", ""); 
+
 my (@includefunction, @excludefunction);
-#my ($excludeowner, $excludeowner_file) = ("", "");
-#my ($includeowner, $includeowner_file) = ("", "");
+
 my (@includeowner, @excludeowner);
 my (@tablelist, @viewlist, @functionlist, @acl_list);
 
@@ -64,7 +55,7 @@ my $commit_msg_fn = "";
 
 my $O = get_options();
 
-validate_options();
+set_config();
 
 print "Creating temp dump...\n";
 create_temp_dump();
@@ -109,7 +100,6 @@ sub get_options {
         'ddlbase' => ".",
         
         'dosvn' => undef,
-    
     );
     show_help_and_die() unless GetOptions(
         \%o,
@@ -155,7 +145,7 @@ sub get_options {
     return \%o;
 }
 
-sub validate_options {
+sub set_config {
     
     # TODO remove database name requirement and use ENV
     show_help_and_die("Database name required. Please set --dbname\n") unless ($O->{'dbname'}); 
@@ -214,10 +204,10 @@ sub validate_options {
         print "Building include lists...\n";
         build_includes();
     }
+    
+
+    
 }
-
-
-
 
 sub create_temp_dump {
     # add option for remote hostname
@@ -397,7 +387,6 @@ sub build_regex_filters {
 sub build_object_lists {
     my $restorecmd = "$O->{pgrestore} -l $dmp_tmp_file";
     my ($objid, $objtype, $objschema, $objname_owner, $objname, $objowner, $key, $value);
-    my (%table_h, %view_h, %function_h, %acl_h);
     
     foreach (`$restorecmd`) {
         if (/^;/) {
@@ -411,50 +400,44 @@ sub build_object_lists {
         # TODO add in object filtering (named & regex) options here
        
         if ($O->{'gettables'} && $objtype eq "TABLE") {
-            %table_h = (
+            push @tablelist, {
                 "id" => $objid,
                 "type" => $objtype,
                 "schema" => $objschema,
                 "name" => $objname,
                 "owner" => $objowner,
-            );
-            push @tablelist, {%table_h};
+            };
         }
 
         if ($O->{'getviews'} && $objtype eq "VIEW") {
-            %view_h = (
+            push @viewlist, {
                 "id" => $objid,
                 "type" => $objtype,
                 "schema" => $objschema,
                 "name" => $objname,
                 "owner" => $objowner,
-            );
-            push @viewlist, {%view_h};
+            };
         }
 
         if ($O->{'getfuncs'} && $objtype eq "FUNCTION") {
-            %function_h = (
+            push @functionlist, {
                 "id" => $objid,
                 "type" => $objtype,
                 "schema" => $objschema,
                 "name" => $objname,
                 "owner" => $objowner,
-            );
-            push @functionlist, {%function_h};
+            };
         }
     
         if ($objtype eq "ACL") {
-            %acl_h = (
+            push @acl_list, {
                 "id" => $objid,
                 "type" => $objtype,
                 "schema" => $objschema,
                 "name" => $objname,
                 "owner" => $objowner,
-            );
-          
-            push @acl_list, {%acl_h};
-        }
-        
+            };
+        }   
     } # end restorecmd if    
 } # end build_object_lists
 
@@ -479,6 +462,7 @@ sub create_ddl_files {
     my $destdir = $_[1];
     my ($restorecmd, $dumpcmd, $fqfn, $funcname);
     my $fulldestdir = create_dirs($destdir);
+    my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddlXXXXXXXX', SUFFIX => 'tmp');
     
     my $list_file_contents = "";
         
@@ -551,7 +535,7 @@ sub create_ddl_files {
 sub copy_sql_dump {
     my $dump_folder = create_dirs("pg_dump");
     my $pgdumpfile = "$dump_folder/$O->{dbname}_pgdump.pgr";
-    copy ($dmp_tmp_file, $pgdumpfile);
+    copy ($dmp_tmp_file->filename, $pgdumpfile);
 }
 
 sub die_cleanup {
@@ -561,11 +545,7 @@ sub die_cleanup {
 }
 
 sub cleanup {
-    #$dbh->disconnect();
-    
-    if (-e $tmp_ddl_file) { unlink $tmp_ddl_file; }
-    if (-e $dmp_tmp_file) { unlink $dmp_tmp_file; }
-   
+   # Was used to cleanup temp files. Keeping for now in case other cleanup is needed
 }
 
 

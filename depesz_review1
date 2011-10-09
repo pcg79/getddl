@@ -86,9 +86,6 @@ use $self (object itself) as %cfg.
 This works. But consider using File::Spec->catfile or ->catdir - it's
 just better, more portable approach.
 
-16. my $dmp_tmp_file = "/tmp/pgdump" . ( time ) . ".$$";
-Instead of hardcoding path to /tmp please use File::Temp module
-
 17. I think that if you are providing default/hardcoded "paths" to
 programs, they should be like "$svn = 'svn'" - i.e. without path, so
 that environment's PATH will be used.
