@@ -91,11 +91,11 @@ sub get_options {
     show_help_and_die() unless GetOptions(
         \%o,
         'ddlbase=s',
-        'username|U',
+        'username|U=s',
         'host|h=s',
         'hostname=s',
         'port|p=i',
-        'pgpass',
+        'pgpass=s',
         'dbname|d=s',
         'pgdump=s',
         'pgrestore=s',

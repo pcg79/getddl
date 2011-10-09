@@ -18,13 +18,6 @@
 --vertical-tightness-closing=0
 --break-at-old-comma-breakpoints
 
-11. When providing options that are basically the same as in
-pg_dump/psql - please make it possible to use also shortcuts, and make
-the options the same as in psql/pg_dump.
-I.e. when I use:
-psql -U ... -d ... -h ... -p ...
-please make sure that your tool will also understand the same options
-
 13. This is the biggest gripe so far - you defined *A LOT* of global
 variables.
 Global variables are bad. Lots of global variables is even worse.
@@ -44,10 +37,6 @@ die ".." unless GetOptions(
 This is of course only example look.
 Another approach (one that I like much better) is to use OO perl, and
 use $self (object itself) as %cfg.
-
-17. I think that if you are providing default/hardcoded "paths" to
-programs, they should be like "$svn = 'svn'" - i.e. without path, so
-that environment's PATH will be used.
 
 22. in build_object_lists() you're parsing output of pg_restore -l.
    in the parse code, you assume that object type is always /\S+/,
