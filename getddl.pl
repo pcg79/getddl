@@ -6,7 +6,7 @@ use warnings;
 # Copyright 2008, OmniTI, Inc. (http://www.omniti.com/)
 # See complete license and copyright information at the bottom of this script  
 # For newer versions of this script, please see:
-# https://labs.omniti.com/trac/pgsoltools/wiki/getddl
+# https://github.com/keithf4/getddl
 # POD Documentation also available by issuing pod2text getddl.pl
 
 
@@ -15,6 +15,7 @@ use English qw( -no_match_vars);
 use File::Path 'mkpath';
 use File::Copy;
 use Getopt::Long qw( :config no_ignore_case );
+use Sys::Hostname;
 
 #### must be manually set. no cmdl options
 #my $dbusername = 'postgres';
@@ -105,7 +106,7 @@ sub get_options {
         'port' => 5432,
         'pgdump' => "/opt/pgsql/bin/pg_dump",
         'pgrestore' => "/opt/pgsql/bin/pg_restore",
-        'ddlbase' => "./",
+        'ddlbase' => ".",
         
         'dosvn' => undef,
     
@@ -193,12 +194,12 @@ sub validate_options {
         die "Cannot specify both include and exclude for the same object type (schema, table, view, function).\n";
     }
      
-    my $real_server_name=`hostname`;
+    my $real_server_name=hostname;
     my $customhost;
     if ($O->{'hostname'}) {
         $customhost = $O->{'hostname'};
     } else {
-        $customhost = chomp($real_server_name);
+        chomp ($customhost = $real_server_name);
     }
     $O->{'basedir'} = "$O->{ddlbase}/$customhost/$O->{dbname}";
 
@@ -240,32 +241,27 @@ sub create_temp_dump {
 
 sub build_excludes {
     my @list;
-    my $count;
-    if($O->{'N'} =~ /,/) {
+    if(defined($O->{'N'}) && $O->{'N'} =~ /,/) {
         @list = split(',', $O->{'N'});
-        for($count=0; $count < scalar(@list); $count++) {
-            $excludeschema_dump .= "-N".$list[$count]." ";
-        }
+        $excludeschema_dump .= "-N".$_." " for @list;
     } else {
       $excludeschema_dump = "-N".$O->{'N'} unless !$O->{'N'};
     }
     
-    if ($O->{'T'} =~ /,/) {
+    if (defined($O->{'T'}) && $O->{'T'} =~ /,/) {
         @list = split(',', $O->{'T'});
-        for ($count=0; $count < scalar(@list); $count++) {
-            $excludetable_dump .= "-T".$list[$count]." ";
-        }
+        $excludetable_dump .= "-T".$_." " for @list;
     } else {
         $excludetable_dump = "-T".$O->{'T'} unless !$O->{'T'};
     }
     
-    if ($O->{'V'} =~ /,/) {
+    if (defined($O->{'V'}) && $O->{'V'} =~ /,/) {
         @excludeview = split(',', $O->{'V'});
     } elsif ($O->{'V'}) {
         push @excludeview, $O->{'V'};
     }
     
-     if ($O->{'O'}=~ /,/) {
+     if (defined($O->{'O'}) && $O->{'O'} =~ /,/) {
         @excludeowner = split(',', $O->{'O'});
      } elsif ($O->{'O'}) {
         push @excludeowner, $O->{'O'};
@@ -319,21 +315,16 @@ sub build_excludes {
 
 sub build_includes {
     my @list;
-    my $count;
-    if ($O->{'n'} =~ /,/) {
+    if (defined($O->{'n'}) && $O->{'n'} =~ /,/) {
         @list = split(',', $O->{'n'});
-        for($count=0; $count < scalar(@list); $count++) {
-            $includeschema_dump .= "-n".$list[$count]." ";
-        }
+        $includeschema_dump .= "-n".$_." " for @list;
     } else {
         $includeschema_dump = "-n".$O->{'n'} unless !$O->{'n'}; 
     }
     
     if (defined($O->{'t'}) && $O->{'t'} =~ /,/) {
         @list = split(',', $O->{'t'});
-        for ($count=0; $count <scalar(@list); $count++) {
-            $includetable_dump .= "-t".$list[$count]." ";
-        }
+        $includetable_dump .= "-t".$_." " for @list;
     } else {
         $includetable_dump = "-t".$O->{'t'} unless !$O->{'t'};
     }
@@ -674,32 +665,32 @@ sub show_help_and_die {
         --dbname        (-d) : database name to connect to
         
         [ directories ]
-        --ddlbase       : base directory for ddl export
-        --hostname      : hostname of the database server; used as directory name under --ddlbase
+        --ddlbase           : base directory for ddl export
+        --hostname          : hostname of the database server; used as directory name under --ddlbase
         
         [ filters ]
-        --gettables     : get table ddl export
-        --getviews      : get view ddl export
-        --getfuncs      : get function ddl export
-        --getall        : gets all tables, views and functions. Shortcut to having to set all 3 of the above.
-        --N             : csv list of schemas to EXCLUDE
-        --N_file        : path to a file listing schemas to exclude. separate by newline
-        --n             : csv list of schemas to INCLUDE
-        --n_file        : path to a file listing schemas to include. separate by newline
-        --T             : csv list of tables to EXCLUDE. Schema name may be required (same for all table options)
-        --T_file        : path to file listing tables to exclude. separate by newline
-        --t             : csv list of tables to INCLUDE. Only these tables will be exported.
-        --t_file        : path to file listing tables to include. separate by newline
+        --gettables         : get table ddl export
+        --getviews          : get view ddl export
+        --getfuncs          : get function ddl export
+        --getall            : gets all tables, views and functions. Shortcut to having to set all 3 of the above.
+        --N                 : csv list of schemas to EXCLUDE
+        --N_file            : path to a file listing schemas to exclude. separate by newline
+        --n                 : csv list of schemas to INCLUDE
+        --n_file            : path to a file listing schemas to include. separate by newline
+        --T                 : csv list of tables to EXCLUDE. Schema name may be required (same for all table options)
+        --T_file            : path to file listing tables to exclude. separate by newline
+        --t                 : csv list of tables to INCLUDE. Only these tables will be exported.
+        --t_file            : path to file listing tables to include. separate by newline
 
         [ other ]
-        --sqldump  also generate a pg_dump file. Will only contain schemas and tables designated by original options.
-        --help              (-?) : show this help page
+        --sqldump            : Also generate a pg_dump file. Will only contain schemas and tables designated by original options.
+        --help          (-?) : show this help page
  	
  	Defaults:
         --hostname          result of running 'hostname' command
         --port              5432
         --username          currently 'postgres'. will be user running getddl 
-        --ddlbase           ./  (directory getddl is run from)
+        --ddlbase           '.'  (directory getddl is run from)
          	
  	Notes:
  	    
@@ -707,53 +698,7 @@ _EOH_
     exit 1;
 }
 
-=head1 NAME
-
-getddl - a ddl to svn script for postgres
-
-=head1 SYNOPSIS
-
-A perl script to query a postgres database, write schema to file, and then check in said files. 
-
-=head1 VERSION
-
-This document refers to version 0.5.1 of getddl, released January 30, 2009
-
-=head1 USAGE
-
-To use getddl, you need to configure several variables inside the script (mostly having to do with different connection options). If dumping multiple databases, 
-the role you define in the configuration will have to have <<<find actual privs needed>>> privileges on all databases.
-
-Once configured, you call gettdll at the command line. 
-
-Example 1: grab ddl for both the tables and function and dump it to /db/schema/ridley, check-in any modifications or new objects, and remove any entries that no longer exist in svn. 
-
-    perl /home/postgres/getddl.pl --host ridley  --ddlbase /db/schema/ --getddl --getprocs --svn --svndel >>  /home/postgres/logs/getddl.log
-
-Example 2: grab ddl of only database functions and dump them to /db/schema/kraid/function.
-
-    perl /home/postgres/getddl.pl --host kraid --ddlbase /db/schema --getprocs 
-
-
-=head1 BUGS AND LIMITATIONS
-
-Some actions may not work on older versions of Postgres (before 8.1).
-
-Please report any problems to robert@omniti.com.
-
-=head1 TODO
-
-=over 
-
-=item * clean up / optimize iteration for items in svn lists
-
-=item * clean-up default hosts directives
-
-=item * validate config options vs. command line options
-
-=item * add support for other rcs systems
-
-=back
+#TODO  Add POD docs here
 
 =head1 LICENSE AND COPYRIGHT
 

@@ -82,10 +82,6 @@ This is of course only example look.
 Another approach (one that I like much better) is to use OO perl, and
 use $self (object itself) as %cfg.
 
-14. Instead of using `hostname` - you can use module Sys::Hostname -
-generally, when you have ` character in your application it's most
-likely a bug or security vulnerability.
-
 15. $basedir = "$DDL_BASE/$curhost/$dbname";
 This works. But consider using File::Spec->catfile or ->catdir - it's
 just better, more portable approach.
@@ -143,19 +139,4 @@ Use of uninitialized value $objtype in string eq at ../getddl.pl line 416.
 Use of uninitialized value $objtype in string eq at ../getddl.pl line 427.
 Use of uninitialized value $objtype in string eq at ../getddl.pl line 438.
 Use of uninitialized value $objtype in string eq at ../getddl.pl line 449.
-
-25. my $count;
-   for ( $count = 0 ; $count < scalar( @list ) ; $count++ ) {
-       $excludeschema_dump .= "-N" . $list[ $count ] . " ";
-   }
-There is no need to declare count outside of for if you're not going to
-use it outside of for, so you could:
-for ( my $count = 0; ... )
-But, more importantly - I found that usage of c-style for loops (for (
-... ; ... ; ... ) ) is extreme rarity.
-above loop can be simply written as:
-$excludeschema_dump .= "-N" . $_ . " " for @list;
-or if you don't like reverse notation:
-for my $schema ( @list ) {
-   $excludeschema_dump .= "-N" . $schema . " ";
-}
+# NOTE: Ask depesz to do this one again. Not sure if previous port issue or something else
