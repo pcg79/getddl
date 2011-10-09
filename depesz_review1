@@ -18,20 +18,12 @@
 --vertical-tightness-closing=0
 --break-at-old-comma-breakpoints
 
-10. Please remember that all of pg programs use environment variables,
-so it would be good if you would use them. This is simpler than it might
-look - instead of passing elaborate --.... options to pg_dump just set
-appropriate PG* env variables if user provided given switch.
-
 11. When providing options that are basically the same as in
 pg_dump/psql - please make it possible to use also shortcuts, and make
 the options the same as in psql/pg_dump.
 I.e. when I use:
 psql -U ... -d ... -h ... -p ...
 please make sure that your tool will also understand the same options
-
-12. requiring $dbname seems excessive - psql nor pg_dump do not require
-it.
 
 13. This is the biggest gripe so far - you defined *A LOT* of global
 variables.
@@ -57,24 +49,11 @@ use $self (object itself) as %cfg.
 programs, they should be like "$svn = 'svn'" - i.e. without path, so
 that environment's PATH will be used.
 
-
-20. push @tablelist, { %table_h };
-this construction, can be better written as:
-push @tablelist, \%table_h;
-it will make the push without copying content of %table_h.
-
-
 22. in build_object_lists() you're parsing output of pg_restore -l.
    in the parse code, you assume that object type is always /\S+/,
    which is not true - for example: FK CONSTRAINT
    #NOTE: Search for any combination of capital letters and spaces? 
    # Make list of known types and match on them?
-
-23. Application as it is now does not delete from disk files that
-represent objects that no longer exist.
-I.e. create table, make getdll, drop the table and make getddl again -
-the file for this table will still be there on disk.
-# NOTE: In planning. Old version let svn take care of this
 
 24. =$ perl ../getddl.pl --dbname depesz --getall
 Creating temp dump...

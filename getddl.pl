@@ -19,16 +19,6 @@ use File::Temp;
 use Getopt::Long qw( :config no_ignore_case );
 use Sys::Hostname;
 
-#### must be manually set. no cmdl options
-
-my $svnuser = "--username postgres --password #####";
-
-# TODO Turn into cmdl option
-#my $pgdump="/opt/pgsql/bin/pg_dump ";
-#my $pgrestore = "/opt/pgsql/bin/pg_restore ";
-#### end manual settings
-
-
 my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddlXXXXXXX', SUFFIX => '.tmp');
 
 my ($excludeschema_dump, $includeschema_dump, $excludetable_dump, $includetable_dump) = ("","","","");
@@ -38,11 +28,12 @@ my (@includeowner, @excludeowner);
 my (@tablelist, @viewlist, @functionlist, @acl_list);
 
 # For future svn stuff
-#my $svn = '/opt/omni/bin/svn';
+#my $svn = 'svn';
 #my $commit_msg = 'Pg ddl updates';
 #my $do_svn_del = 0;
 #my (@to_commit, @to_add);
 #my $commit_msg_fn = "";
+#my $svnuser = "--username postgres --password #####";
 
 
 ################ Run main program subroutines
@@ -89,10 +80,10 @@ exit;
 sub get_options {
     # TODO get ENV variables for postgres to set defaults
     my %o = (
-        'username' => "postgres", 
-        'port' => 5432,
-        'pgdump' => "/opt/pgsql/bin/pg_dump",
-        'pgrestore' => "/opt/pgsql/bin/pg_restore",
+        #'username' => "postgres", 
+        #'port' => 5432,
+        'pgdump' => "pg_dump",
+        'pgrestore' => "pg_restore",
         'ddlbase' => ".",
         
         'dosvn' => undef,
@@ -104,7 +95,10 @@ sub get_options {
         'host|h=s',
         'hostname=s',
         'port|p=i',
+        'pgpass',
         'dbname|d=s',
+        'pgdump=s',
+        'pgrestore=s',
         'quiet!',
         'gettables!',
         'getviews!',
@@ -144,8 +138,23 @@ sub get_options {
 sub set_config {
     
     # TODO remove database name requirement and use ENV
-    show_help_and_die("Database name required. Please set --dbname\n") unless ($O->{'dbname'}); 
+    #show_help_and_die("Database name required. Please set --dbname\n") unless ($O->{'dbname'}); 
     #if (!$dbname) { die "Database name required. Please set --dbname\n"; }
+    if ($O->{'dbname'}) { 
+        $ENV{PGDATABASE} = $O->{'dbname'};
+    }
+    if ($O->{'port'}) {
+        $ENV{PGPORT} = $O->{'port'};
+    }
+    if ($O->{'host'}) {
+        $ENV{PGHOST} = $O->{'host'};
+    }
+    if ($O->{'username'}) {
+        $ENV{PGUSER} = $O->{'username'};
+    }
+    if ($O->{'pgpass'}) {
+        $ENV{PGPASSFILE} = $O->{'pgpass'};
+    }
 
     if (!$O->{'gettables'} && !$O->{'getfuncs'} && !$O->{'getviews'}) {
         if ($O->{'getall'}) {
@@ -188,7 +197,7 @@ sub set_config {
         chomp ($customhost = $real_server_name);
     }
     #$O->{'basedir'} = "$O->{ddlbase}/$customhost/$O->{dbname}";
-    $O->{'basedir'} = File::Spec->catdir($O->{ddlbase}, $customhost, $O->{dbname});
+    $O->{'basedir'} = File::Spec->catdir($O->{ddlbase}, $customhost, $ENV{PGDATABASE});
 
 
     if ($O->{'N'} || $O->{'N_file'} || $O->{'T'} || $O->{'T_file'} || 
@@ -200,15 +209,12 @@ sub set_config {
             $O->{'v'} || $O->{'v_file'} || $O->{'p_file'}) {
         print "Building include lists...\n";
         build_includes();
-    }
-    
-
-    
+    }   
 }
 
 sub create_temp_dump {
     # add option for remote hostname
-    my $pgdumpcmd = "$O->{pgdump} -s -Fc -U $O->{username} -p $O->{port} ";
+    my $pgdumpcmd = "$O->{pgdump} -s -Fc ";
 
     if ($O->{'N'} || $O->{'N_file'}) {
         $pgdumpcmd .= "$excludeschema_dump ";
@@ -222,8 +228,12 @@ sub create_temp_dump {
     if ($O->{'t'} || $O->{'t_file'}) {
         $pgdumpcmd .= "$includetable_dump ";
     }
-    print "$pgdumpcmd $O->{dbname} > $dmp_tmp_file\n";  
-    system "$pgdumpcmd $O->{dbname} > $dmp_tmp_file";
+    
+    #if ($O->{'dbname'}) {
+    #    $pgdumpcmd .= "$O->{dbname} ";
+    #}
+    print "$pgdumpcmd > $dmp_tmp_file\n";  
+    system "$pgdumpcmd > $dmp_tmp_file";
 }
 
 sub build_excludes {
@@ -480,7 +490,7 @@ sub create_ddl_files {
         $list_file_contents = "$t->{id} $t->{type} $t->{schema} $t->{name} $t->{owner}\n";
         
         if ($t->{'type'} eq "TABLE") {
-            $dumpcmd = "$O->{pgdump} -U $O->{username} -p $O->{port} -s -Fp -t$t->{schema}.$t->{name} $O->{dbname} > $fqfn.sql";
+            $dumpcmd = "$O->{pgdump} -s -Fp -t$t->{schema}.$t->{name} > $fqfn.sql";
             system $dumpcmd;
         } else {
             # TODO this is a mess but, amazingly, it works. try and tidy up if possible.
@@ -534,7 +544,7 @@ sub create_ddl_files {
 
 sub copy_sql_dump {
     my $dump_folder = create_dirs("pg_dump");
-    my $pgdumpfile = "$dump_folder/$O->{dbname}_pgdump.pgr";
+    my $pgdumpfile = File::Spec->catfile($dump_folder, "$ENV{PGDATABASE}_pgdump.pgr");
     copy ($dmp_tmp_file->filename, $pgdumpfile);
 }
 
@@ -548,6 +558,61 @@ sub cleanup {
    # Was used to cleanup temp files. Keeping for now in case other cleanup is needed
 }
 
+sub show_help_and_die {
+ 	    my ( $format, @args ) = @_;
+ 	    if ( defined $format ) {
+ 	        $format =~ s/\s*\z/\n/;
+ 	        printf STDERR $format, @args;
+ 	    }
+ 	    print STDERR <<_EOH_;
+    Syntax:
+        $PROGRAM_NAME [options]
+ 	
+ 	Options:
+        [ database connection ]
+        --host          (-h) : database server host or socket directory
+        --port          (-p) : database server port
+        --username      (-U) : database user name
+        --pgpass             : full path to location of .pgpass file
+        --dbname        (-d) : database name to connect to
+        
+        [ directories ]
+        --ddlbase           : base directory for ddl export
+        --hostname          : hostname of the database server; used as directory name under --ddlbase
+        --pgdump            : location of pg_dump executable
+        --pgrestore         : location of pg_restore executable
+        
+        [ filters ]
+        --gettables         : get table ddl export
+        --getviews          : get view ddl export
+        --getfuncs          : get function ddl export
+        --getall            : gets all tables, views and functions. Shortcut to having to set all 3 of the above.
+        --N                 : csv list of schemas to EXCLUDE
+        --N_file            : path to a file listing schemas to exclude. separate by newline
+        --n                 : csv list of schemas to INCLUDE
+        --n_file            : path to a file listing schemas to include. separate by newline
+        --T                 : csv list of tables to EXCLUDE. Schema name may be required (same for all table options)
+        --T_file            : path to file listing tables to exclude. separate by newline
+        --t                 : csv list of tables to INCLUDE. Only these tables will be exported.
+        --t_file            : path to file listing tables to include. separate by newline
+
+        [ other ]
+        --sqldump            : Also generate a pg_dump file. Will only contain schemas and tables designated by original options.
+        --help          (-?) : show this help page
+ 	
+ 	Defaults:
+        --hostname          result of running Sys::Hostname
+        --port              Env variable \$PGPORT then postgres default 5432
+        --username          Env variable \$PGUSER then current OS username
+        --ddlbase           '.'  (directory getddl is run from)
+        --pgdump/restore    searches \$PATH
+        --dbname            Env variable \$PGDATABASE then current OS username
+         	
+ 	Notes:
+ 	    
+_EOH_
+    exit 1;
+}
 
 # From old getddl.
 # TODO: Do svn status on folder and read that output instead of comparing each individual file
@@ -559,17 +624,18 @@ sub svn_check {
 
     #print "  * comparing $args{fqn}\n" if not $O->{quiet};
     # svn st, ? = add, m = commit
-    my $svnst = `$args{svn} st $svnuser $fn`;
-    for my $line (split "\n", $svnst) {
-        next if $line !~ /\.sql$/;
-        if ($line =~ /^\?\s+(\S+)$/) {
-            print "svn add: $fn\n" if not $O->{quiet};
-            push @{$args{to_add}}, $fn;           
-        } elsif ($line =~ /^[M|A]\s+\Q$fn/) {
-            print "svn modified: $fn\n" if not $O->{quiet};
-            push @{$args{to_commit}}, $fn;
-        }
-    }
+    
+    #my $svnst = `$args{svn} st $svnuser $fn`;
+    #for my $line (split "\n", $svnst) {
+    #    next if $line !~ /\.sql$/;
+    #    if ($line =~ /^\?\s+(\S+)$/) {
+    #        print "svn add: $fn\n" if not $O->{quiet};
+    #        push @{$args{to_add}}, $fn;           
+    #    } elsif ($line =~ /^[M|A]\s+\Q$fn/) {
+    #        print "svn modified: $fn\n" if not $O->{quiet};
+    #        push @{$args{to_commit}}, $fn;
+    #    }
+    #}
 }
     
 # TODO This is the old delete sub with the new array lists added. Most likely needs fixing
@@ -627,56 +693,6 @@ sub files_to_delete {
     return @files;
 }
 
-sub show_help_and_die {
- 	    my ( $format, @args ) = @_;
- 	    if ( defined $format ) {
- 	        $format =~ s/\s*\z/\n/;
- 	        printf STDERR $format, @args;
- 	    }
- 	    print STDERR <<_EOH_;
-    Syntax:
-        $PROGRAM_NAME [options]
- 	
- 	Options:
-        [ database connection ]
-        --host          (-h) : database server host or socket directory
-        --port          (-p) : database server port
-        --username      (-U) : database user name
-        --dbname        (-d) : database name to connect to
-        
-        [ directories ]
-        --ddlbase           : base directory for ddl export
-        --hostname          : hostname of the database server; used as directory name under --ddlbase
-        
-        [ filters ]
-        --gettables         : get table ddl export
-        --getviews          : get view ddl export
-        --getfuncs          : get function ddl export
-        --getall            : gets all tables, views and functions. Shortcut to having to set all 3 of the above.
-        --N                 : csv list of schemas to EXCLUDE
-        --N_file            : path to a file listing schemas to exclude. separate by newline
-        --n                 : csv list of schemas to INCLUDE
-        --n_file            : path to a file listing schemas to include. separate by newline
-        --T                 : csv list of tables to EXCLUDE. Schema name may be required (same for all table options)
-        --T_file            : path to file listing tables to exclude. separate by newline
-        --t                 : csv list of tables to INCLUDE. Only these tables will be exported.
-        --t_file            : path to file listing tables to include. separate by newline
-
-        [ other ]
-        --sqldump            : Also generate a pg_dump file. Will only contain schemas and tables designated by original options.
-        --help          (-?) : show this help page
- 	
- 	Defaults:
-        --hostname          result of running Sys::Hostname
-        --port              5432
-        --username          currently 'postgres'. will be user running getddl 
-        --ddlbase           '.'  (directory getddl is run from)
-         	
- 	Notes:
- 	    
-_EOH_
-    exit 1;
-}
 
 #TODO  Add POD docs here
 
