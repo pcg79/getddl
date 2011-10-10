@@ -28,11 +28,7 @@ my (@includeowner, @excludeowner);
 my (@tablelist, @viewlist, @functionlist, @acl_list);
 
 # For future svn stuff
-#my $svn = 'svn';
-#my $commit_msg = 'Pg ddl updates';
-#my $do_svn_del = 0;
 #my (@to_commit, @to_add);
-#my $commit_msg_fn = "";
 #my $svnuser = "--username postgres --password #####";
 
 
@@ -82,7 +78,8 @@ sub get_options {
         'pgrestore' => "pg_restore",
         'ddlbase' => ".",
         
-        'dosvn' => undef,
+        'svn' => 'svn',
+        'commit_msg' => 'Pg ddl updates',
     );
     show_help_and_die() unless GetOptions(
         \%o,
@@ -119,13 +116,15 @@ sub get_options {
         'o=s',
         'O_file=s',
         'o_file=s',
-        'svn!',
-        'svndel',
+        
+        'svn=s',
+        'svndel!',
         'svndir=s',
         'commitmsg=s',
         'commitmsgfn=s',
         
         'help|?',
+        'getdata!',    # leave as undocumented feature. shhh!
     );
     show_help_and_die() if $o{'help'};
     return \%o;
@@ -205,8 +204,11 @@ sub set_config {
 }
 
 sub create_temp_dump {
-    my $pgdumpcmd = "$O->{pgdump} -s -Fc ";
-
+    my $pgdumpcmd = "$O->{pgdump} -Fc ";
+    
+    if (!$O->{'getdata'}) {
+        $pgdumpcmd .= "-s ";
+    }
     if ($O->{'N'} || $O->{'N_file'}) {
         $pgdumpcmd .= "$excludeschema_dump ";
     }
@@ -360,6 +362,7 @@ sub build_includes {
         open $fh, "<", $O->{'p_file'} or die_cleanup("Cannot open include file for reading [$O->{p_file}]: $!");
         while(<$fh>) {
             chomp;
+            print "from p_file: $_\n";
             push @includefunction, $_;
         }
         close $fh;
@@ -396,9 +399,10 @@ sub build_object_lists {
         } else {
             ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)/;
         }
+        
         # TODO add in object regex filter options here
         # TODO need to account for custom TYPES (see dblink schema)
-        
+        # TODO need to account for COMMENTS on objects other than tables
         if (@excludeowner) {
             foreach (@excludeowner) {
                 next RESTORE_LABEL if ($_ eq $objowner);
@@ -431,6 +435,15 @@ sub build_object_lists {
                     }
                 }
             }
+            if (@includeview) {
+                foreach (@includeview) {
+                    if ($_ =~ /\./) {
+                        next RESTORE_LABEL if($_ ne "$objschema.$objname");
+                    } elsif ($_ ne $objname) {
+                        next RESTORE_LABEL;
+                    }
+                }
+            }
             push @viewlist, {
                 "id" => $objid,
                 "type" => $objtype,
@@ -441,6 +454,29 @@ sub build_object_lists {
         }
 
         if ($O->{'getfuncs'} && $objtype eq "FUNCTION") {
+            if (@includefunction) {
+                my $found = 0;
+                foreach (@includefunction) {
+                    if ($_ =~ /\./) {
+                        #print "includefunction schema: $_\n";
+                        #print "restore function: $objschema.$objname\n";
+                         if($_ ne "$objschema.$objname") {
+                         #   print "next called\n";
+                            next;
+                         } else {
+                          #  print "function include match\n";
+                            $found = 1;
+                         }
+                    } elsif ($_ ne $objname) {
+                        #print "function name: $_\n";
+                        #print "restore function: $objschema.$objname\n";
+                        next;
+                    }
+                }
+                if (!$found) {
+                    next RESTORE_LABEL;
+                }
+            }
             if (@excludefunction) {
                 foreach (@excludefunction) {
                     if ($_ =~ /\./) {
@@ -450,6 +486,7 @@ sub build_object_lists {
                     }
                 }
             }
+            print "push to functionlist\n";
             push @functionlist, {
                 "id" => $objid,
                 "type" => $objtype,
@@ -491,7 +528,7 @@ sub create_dirs {
 sub create_ddl_files {
     my (@objlist) = (@{$_[0]});
     my $destdir = $_[1];
-    my ($restorecmd, $dumpcmd, $fqfn, $funcname);
+    my ($restorecmd, $pgdumpcmd, $fqfn, $funcname);
     my $fulldestdir = create_dirs($destdir);
     my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXXX', SUFFIX => '.tmp');
     
@@ -511,8 +548,12 @@ sub create_ddl_files {
         $list_file_contents = "$t->{id} $t->{type} $t->{schema} $t->{name} $t->{owner}\n";
         
         if ($t->{'type'} eq "TABLE") {
-            $dumpcmd = "$O->{pgdump} -s -Fp -t$t->{schema}.$t->{name} > $fqfn.sql";
-            system $dumpcmd;
+            $pgdumpcmd = "$O->{pgdump} ";
+            if (!$O->{'getdata'}) {
+                $pgdumpcmd .= "-s ";
+            } 
+            $pgdumpcmd .= "-Fp -t$t->{schema}.$t->{name} > $fqfn.sql";
+            system $pgdumpcmd;
         } else {
             # TODO this is a mess but, amazingly, it works. try and tidy up if possible.
             # TODO it's actually missing some functions. See dblink export
