@@ -19,7 +19,7 @@ use File::Temp;
 use Getopt::Long qw( :config no_ignore_case );
 use Sys::Hostname;
 
-my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXX', SUFFIX => '.tmp');
+
 
 my ($excludeschema_dump, $includeschema_dump, $excludetable_dump, $includetable_dump) = ("","","","");
 my (@includeview, @excludeview);
@@ -39,6 +39,11 @@ my (@tablelist, @viewlist, @functionlist, @acl_list);
 my $O = get_options();
 
 set_config();
+
+create_dirs();
+my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXX', 
+                                    SUFFIX => '.tmp',
+                                    DIR => $O->{'basedir'});
 
 print "Creating temp dump...\n";
 create_temp_dump();
@@ -545,7 +550,9 @@ sub create_ddl_files {
     my $destdir = $_[1];
     my ($restorecmd, $pgdumpcmd, $fqfn, $funcname);
     my $fulldestdir = create_dirs($destdir);
-    my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXXX', SUFFIX => '.tmp');
+    my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXXX', 
+                                        SUFFIX => '.tmp',
+                                        DIR => $O->{'basedir'});
     
     my $list_file_contents = "";
      
@@ -585,13 +592,11 @@ sub create_ddl_files {
                 }
                 my $dupefunc;
                 
-                # loop through again to find dupes (overloads)
+                # loop through dupe of objlist to find dupes (overloads)
                 foreach my $d (@dupe_objlist) {
                     $dupefunc = substr($d->{'name'}, 0, index($d->{'name'}, "\("));
-                    ##print "dupefunc: $dupefunc - $d->{id} $d->{type} $d->{schema} $d->{name} $d->{owner}\n";
                     # if there is another function with the same name, but different signature, as this one ($t)...
                     if ($funcname eq $dupefunc && $t->{'name'} ne $d->{'name'}) {
-                        ##print "dupe matched \$t->{'name'}: $t->{'name'}, \$d->{'name'}: $d->{'name'}\n";
                         # ...add overload of function ($d) to current file output
                         $list_file_contents .= "$d->{id} $d->{type} $d->{schema} $d->{name} $d->{owner}\n";
                         # add overloaded function's ACL if it exists
@@ -603,7 +608,6 @@ sub create_ddl_files {
                         # if duplicate found, remove from main @objlist so it doesn't get output again.
                         splice(@objlist,$offset,1)
                     }
-                    
                 }
             } else {
                 # add to current file output if this object has an ACL
@@ -652,7 +656,7 @@ sub show_help_and_die {
         $PROGRAM_NAME [options]
         
     Notes:
-        All options that use an external file list but separate each item in the file by a newline.
+        For all options that use an external file list, separate each item in the file by a newline.
         If no schema name is given in an object filter, it will match across all schemas requested in the export.
  	
  	Options:
