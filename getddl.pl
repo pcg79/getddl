@@ -51,12 +51,21 @@ create_temp_dump();
 print "Building object lists...\n";
 build_object_lists();
 
-print "Creating table ddl files...\n";
-if (@tablelist) { create_ddl_files(\@tablelist, "tables");    }
-print "Creating view ddl files...\n";
-if (@viewlist) { create_ddl_files(\@viewlist, "views");    }  
-print "Creating function ddl files...\n";
-if (@functionlist) { create_ddl_files(\@functionlist, "functions"); }    
+
+if (@tablelist) { 
+    print "Creating table ddl files...\n";
+    create_ddl_files(\@tablelist, "tables");    
+}
+
+if (@viewlist) { 
+    print "Creating view ddl files...\n";
+    create_ddl_files(\@viewlist, "views");   
+}  
+
+if (@functionlist) { 
+    print "Creating function ddl files...\n";
+    create_ddl_files(\@functionlist, "functions"); 
+}    
 
 print "Creating pg_dump file...\n";
 if ($O->{sqldump}) {
@@ -395,6 +404,8 @@ sub build_object_lists {
     
     
     RESTORE_LABEL: foreach (`$restorecmd`) {
+        chomp;
+        ##print "restorecmd result: $_ \n";
         if (/^;/) {
             next;
         }
@@ -403,7 +414,10 @@ sub build_object_lists {
         } else {
             ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)/;
         }
-        
+        if (!$objtype) {
+            next;
+        }
+        #print "build list: \$objid: $objid, \$objtype : $objtype, \$objschema : $objschema, \$objname : $objname, \$objowner : $objowner\n";
         # TODO add in object regex filter options here
         # TODO need to account for custom TYPES (see dblink schema)
         # TODO need to account for COMMENTS on objects other than tables
