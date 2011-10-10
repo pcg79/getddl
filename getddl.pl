@@ -436,12 +436,24 @@ sub build_object_lists {
                 }
             }
             if (@includeview) {
+                my $found = 0;
                 foreach (@includeview) {
                     if ($_ =~ /\./) {
-                        next RESTORE_LABEL if($_ ne "$objschema.$objname");
-                    } elsif ($_ ne $objname) {
-                        next RESTORE_LABEL;
+                         if($_ ne "$objschema.$objname") {
+                            next;
+                         } else {
+                            $found = 1;
+                         }
+                    } else {
+                        if ($_ ne $objname) {
+                            next;
+                        } else {
+                            $found = 1;
+                        }
                     }
+                }
+                if (!$found) {
+                    next RESTORE_LABEL;
                 }
             }
             push @viewlist, {
@@ -454,6 +466,16 @@ sub build_object_lists {
         }
 
         if ($O->{'getfuncs'} && $objtype eq "FUNCTION") {
+            if (@excludefunction) {
+                foreach (@excludefunction) {
+                    if ($_ =~ /\./) {
+                        next RESTORE_LABEL if($_ eq "$objschema.$objname");
+                    } elsif ($_ eq $objname) {
+                        next RESTORE_LABEL;
+                    }
+                }
+            }
+            
             if (@includefunction) {
                 my $found = 0;
                 foreach (@includefunction) {
@@ -467,26 +489,20 @@ sub build_object_lists {
                           #  print "function include match\n";
                             $found = 1;
                          }
-                    } elsif ($_ ne $objname) {
-                        #print "function name: $_\n";
-                        #print "restore function: $objschema.$objname\n";
-                        next;
+                    } else {
+                        if ($_ ne $objname) {
+                            #print "function name: $_\n";
+                            #print "restore function: $objschema.$objname\n";
+                            next;
+                        } else {
+                            $found = 1;
+                        }
                     }
                 }
                 if (!$found) {
                     next RESTORE_LABEL;
                 }
             }
-            if (@excludefunction) {
-                foreach (@excludefunction) {
-                    if ($_ =~ /\./) {
-                        next RESTORE_LABEL if($_ eq "$objschema.$objname");
-                    } elsif ($_ eq $objname) {
-                        next RESTORE_LABEL;
-                    }
-                }
-            }
-            print "push to functionlist\n";
             push @functionlist, {
                 "id" => $objid,
                 "type" => $objtype,
@@ -633,6 +649,7 @@ sub show_help_and_die {
         
     Notes:
         All options that use an external file list but separate each item in the file by a newline.
+        If no schema name is given in an object filter, it will match across all schemas requested in the export.
  	
  	Options:
         [ database connection ]
