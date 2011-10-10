@@ -362,7 +362,6 @@ sub build_includes {
         open $fh, "<", $O->{'p_file'} or die_cleanup("Cannot open include file for reading [$O->{p_file}]: $!");
         while(<$fh>) {
             chomp;
-            print "from p_file: $_\n";
             push @includefunction, $_;
         }
         close $fh;
@@ -549,9 +548,11 @@ sub create_ddl_files {
     my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXXX', SUFFIX => '.tmp');
     
     my $list_file_contents = "";
-        
+     
+    my $offset = 0;
+    
     foreach my $t (@objlist) {
-        
+
         print "objlist: $t->{id} $t->{type} $t->{schema} $t->{name} $t->{owner}\n";
         
         if ($t->{'name'} =~ /\(.*\)/) {
@@ -572,10 +573,10 @@ sub create_ddl_files {
             system $pgdumpcmd;
         } else {
             # TODO this is a mess but, amazingly, it works. try and tidy up if possible.
-            # TODO it's actually missing some functions. See dblink export
             # put all functions with same basename in the same output file 
             # along with each function's ACL following just after it.
             if ($t->{'type'} eq "FUNCTION") {
+                my @dupe_objlist = @objlist;
                 # add to current file output if first found of object has an ACL
                 foreach (@acl_list) {
                     if ($_->{'name'} eq $t->{'name'}) {
@@ -583,12 +584,14 @@ sub create_ddl_files {
                     }
                 }
                 my $dupefunc;
-                my $offset = 0;
+                
                 # loop through again to find dupes (overloads)
-                foreach my $d (@objlist) {
+                foreach my $d (@dupe_objlist) {
                     $dupefunc = substr($d->{'name'}, 0, index($d->{'name'}, "\("));
+                    ##print "dupefunc: $dupefunc - $d->{id} $d->{type} $d->{schema} $d->{name} $d->{owner}\n";
                     # if there is another function with the same name, but different signature, as this one ($t)...
                     if ($funcname eq $dupefunc && $t->{'name'} ne $d->{'name'}) {
+                        ##print "dupe matched \$t->{'name'}: $t->{'name'}, \$d->{'name'}: $d->{'name'}\n";
                         # ...add overload of function ($d) to current file output
                         $list_file_contents .= "$d->{id} $d->{type} $d->{schema} $d->{name} $d->{owner}\n";
                         # add overloaded function's ACL if it exists
@@ -597,10 +600,10 @@ sub create_ddl_files {
                                 $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
                             }
                         }
-                        # if duplicate found, remove from looped function list so it doesn't get output again.
+                        # if duplicate found, remove from main @objlist so it doesn't get output again.
                         splice(@objlist,$offset,1)
                     }
-                    $offset++;
+                    
                 }
             } else {
                 # add to current file output if this object has an ACL
@@ -618,7 +621,8 @@ sub create_ddl_files {
             close LIST;
         }
         chmod 0664, $fqfn;
-    }
+        $offset++;
+    }  # end @objlist foreach
 }
 
 sub copy_sql_dump {
