@@ -19,7 +19,7 @@ use File::Temp;
 use Getopt::Long qw( :config no_ignore_case );
 use Sys::Hostname;
 
-my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddlXXXXXXX', SUFFIX => '.tmp');
+my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXX', SUFFIX => '.tmp');
 
 my ($excludeschema_dump, $includeschema_dump, $excludetable_dump, $includetable_dump) = ("","","","");
 my (@includeview, @excludeview);
@@ -50,7 +50,6 @@ create_temp_dump();
 print "Building object lists...\n";
 build_object_lists();
 
-# TODO Doublecheck tables are getting triggers exported.
 print "Creating table ddl files...\n";
 if (@tablelist) { create_ddl_files(\@tablelist, "tables");    }
 print "Creating view ddl files...\n";
@@ -78,10 +77,7 @@ exit;
 # TODO Look through pg_restore options and add more here
 # TODO See if role export can be done
 sub get_options {
-    # TODO get ENV variables for postgres to set defaults
     my %o = (
-        #'username' => "postgres", 
-        #'port' => 5432,
         'pgdump' => "pg_dump",
         'pgrestore' => "pg_restore",
         'ddlbase' => ".",
@@ -137,9 +133,6 @@ sub get_options {
 
 sub set_config {
     
-    # TODO remove database name requirement and use ENV
-    #show_help_and_die("Database name required. Please set --dbname\n") unless ($O->{'dbname'}); 
-    #if (!$dbname) { die "Database name required. Please set --dbname\n"; }
     if ($O->{'dbname'}) { 
         $ENV{PGDATABASE} = $O->{'dbname'};
     }
@@ -196,24 +189,22 @@ sub set_config {
     } else {
         chomp ($customhost = $real_server_name);
     }
-    #$O->{'basedir'} = "$O->{ddlbase}/$customhost/$O->{dbname}";
     $O->{'basedir'} = File::Spec->catdir($O->{ddlbase}, $customhost, $ENV{PGDATABASE});
 
 
     if ($O->{'N'} || $O->{'N_file'} || $O->{'T'} || $O->{'T_file'} || 
-            $O->{'V'} || $O->{'V_file'} || $O->{'P_file'}) {
+            $O->{'V'} || $O->{'V_file'} || $O->{'P_file'} || $O->{'O'} || $O->{'O_file'}) {
         print "Building exclude lists...\n";
         build_excludes();
     }
     if ($O->{'n'} || $O->{'n_file'} || $O->{'t'} || $O->{'t_file'} || 
-            $O->{'v'} || $O->{'v_file'} || $O->{'p_file'}) {
+            $O->{'v'} || $O->{'v_file'} || $O->{'p_file'} || $O->{'o'} || $O->{'o_file'}) {
         print "Building include lists...\n";
         build_includes();
     }   
 }
 
 sub create_temp_dump {
-    # add option for remote hostname
     my $pgdumpcmd = "$O->{pgdump} -s -Fc ";
 
     if ($O->{'N'} || $O->{'N_file'}) {
@@ -229,9 +220,6 @@ sub create_temp_dump {
         $pgdumpcmd .= "$includetable_dump ";
     }
     
-    #if ($O->{'dbname'}) {
-    #    $pgdumpcmd .= "$O->{dbname} ";
-    #}
     print "$pgdumpcmd > $dmp_tmp_file\n";  
     system "$pgdumpcmd > $dmp_tmp_file";
 }
@@ -262,6 +250,7 @@ sub build_excludes {
      if (defined($O->{'O'}) && $O->{'O'} =~ /,/) {
         @excludeowner = split(',', $O->{'O'});
      } elsif ($O->{'O'}) {
+        print "\$O->{O} : $O->{'O'}\n";
         push @excludeowner, $O->{'O'};
      }
     
@@ -397,7 +386,8 @@ sub build_object_lists {
     my $restorecmd = "$O->{pgrestore} -l $dmp_tmp_file";
     my ($objid, $objtype, $objschema, $objname_owner, $objname, $objowner, $key, $value);
     
-    foreach (`$restorecmd`) {
+    
+    RESTORE_LABEL: foreach (`$restorecmd`) {
         if (/^;/) {
             next;
         }
@@ -406,7 +396,20 @@ sub build_object_lists {
         } else {
             ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)/;
         }
-        # TODO add in object filtering (named & regex) options here
+        # TODO add in object regex filter options here
+        # TODO need to account for custom TYPES (see dblink schema)
+        
+        if (@excludeowner) {
+            foreach (@excludeowner) {
+                next RESTORE_LABEL if ($_ eq $objowner);
+            }
+        }
+        
+        if (@includeowner) {
+            foreach (@includeowner) {
+                next RESTORE_LABEL if ($_ ne $objowner);
+            }
+        }
        
         if ($O->{'gettables'} && $objtype eq "TABLE") {
             push @tablelist, {
@@ -419,6 +422,15 @@ sub build_object_lists {
         }
 
         if ($O->{'getviews'} && $objtype eq "VIEW") {
+            if (@excludeview) {
+                foreach (@excludeview) {
+                    if ($_ =~ /\./) {
+                        next RESTORE_LABEL if($_ eq "$objschema.$objname");
+                    } elsif ($_ eq $objname) {
+                        next RESTORE_LABEL;
+                    }
+                }
+            }
             push @viewlist, {
                 "id" => $objid,
                 "type" => $objtype,
@@ -429,6 +441,15 @@ sub build_object_lists {
         }
 
         if ($O->{'getfuncs'} && $objtype eq "FUNCTION") {
+            if (@excludefunction) {
+                foreach (@excludefunction) {
+                    if ($_ =~ /\./) {
+                        next RESTORE_LABEL if($_ eq "$objschema.$objname");
+                    } elsif ($_ eq $objname) {
+                        next RESTORE_LABEL;
+                    }
+                }
+            }
             push @functionlist, {
                 "id" => $objid,
                 "type" => $objtype,
@@ -437,7 +458,7 @@ sub build_object_lists {
                 "owner" => $objowner,
             };
         }
-    
+        
         if ($objtype eq "ACL") {
             push @acl_list, {
                 "id" => $objid,
@@ -472,7 +493,7 @@ sub create_ddl_files {
     my $destdir = $_[1];
     my ($restorecmd, $dumpcmd, $fqfn, $funcname);
     my $fulldestdir = create_dirs($destdir);
-    my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddlXXXXXXXX', SUFFIX => '.tmp');
+    my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXXX', SUFFIX => '.tmp');
     
     my $list_file_contents = "";
         
@@ -494,6 +515,7 @@ sub create_ddl_files {
             system $dumpcmd;
         } else {
             # TODO this is a mess but, amazingly, it works. try and tidy up if possible.
+            # TODO it's actually missing some functions. See dblink export
             # put all functions with same basename in the same output file 
             # along with each function's ACL following just after it.
             if ($t->{'type'} eq "FUNCTION") {
@@ -567,6 +589,9 @@ sub show_help_and_die {
  	    print STDERR <<_EOH_;
     Syntax:
         $PROGRAM_NAME [options]
+        
+    Notes:
+        All options that use an external file list but separate each item in the file by a newline.
  	
  	Options:
         [ database connection ]
@@ -583,38 +608,45 @@ sub show_help_and_die {
         --pgrestore         : location of pg_restore executable
         
         [ filters ]
-        --gettables         : get table ddl export
-        --getviews          : get view ddl export
-        --getfuncs          : get function ddl export
-        --getall            : gets all tables, views and functions. Shortcut to having to set all 3 of the above.
+        --gettables         : export table ddl. Each file includes table's indexes, constraints, sequences, comments, rules and triggers
+        --getviews          : export view ddl
+        --getfuncs          : export function ddl. Overloaded functions will all be in the same base filename
+        --getall            : gets all tables, views and functions. Shortcut to having to set all 3 of the above
         --N                 : csv list of schemas to EXCLUDE
-        --N_file            : path to a file listing schemas to exclude. separate by newline
+        --N_file            : path to a file listing schemas to EXCLUDE.
         --n                 : csv list of schemas to INCLUDE
-        --n_file            : path to a file listing schemas to include. separate by newline
+        --n_file            : path to a file listing schemas to INCLUDE.
         --T                 : csv list of tables to EXCLUDE. Schema name may be required (same for all table options)
-        --T_file            : path to file listing tables to exclude. separate by newline
-        --t                 : csv list of tables to INCLUDE. Only these tables will be exported.
-        --t_file            : path to file listing tables to include. separate by newline
+        --T_file            : path to file listing tables to EXCLUDE.
+        --t                 : csv list of tables to INCLUDE. Only these tables will be exported
+        --t_file            : path to file listing tables to INCLUDE.
+        --V                 : csv list of views to EXCLUDE. 
+        --V_file            : path to file listing views to EXCLUDE.
+        --v                 : csv list of views to INCLUDE. Only these views will be exported
+        --v_file            : path to file listing views to INCLUDE. 
+        --P_file            : path to file listing functions to EXCLUDE.
+        --p_file            : path to file listing functions to INCLUDE.
+        --O                 : csv list of object owners to EXCLUDE. Objects owned by these owners will NOT be exported
+        --O_file            : path to file listing object owners to EXCLUDE. Objects owned by these owners will NOT be exported
+        --o                 : csv list of object owners to INCLUDE. Only objects owned by these owners will be exported
+        --o_file            : path to file listing object owners to INCLUDE. Only objects owned by these owners will be exported
 
         [ other ]
         --sqldump            : Also generate a pg_dump file. Will only contain schemas and tables designated by original options.
         --help          (-?) : show this help page
  	
  	Defaults:
-        --hostname          result of running Sys::Hostname
-        --port              Env variable \$PGPORT then postgres default 5432
-        --username          Env variable \$PGUSER then current OS username
+        The following environment values are used: \$PGDATABASE, \$PGPORT, \$PGUSER, \$PGHOST, \$PGPASSFILE
+        If not set and associated option is not passed, defaults will work the same as standard pg_dump.
+        
         --ddlbase           '.'  (directory getddl is run from)
-        --pgdump/restore    searches \$PATH
-        --dbname            Env variable \$PGDATABASE then current OS username
-         	
- 	Notes:
- 	    
+        --pgdump/restore    searches \$PATH 	    
 _EOH_
     exit 1;
 }
 
-# From old getddl.
+############# From old getddl ################
+
 # TODO: Do svn status on folder and read that output instead of comparing each individual file
 # Match on M, A, D, ? statuses for each file and act appropriately
 sub svn_check {

@@ -41,8 +41,10 @@ use $self (object itself) as %cfg.
 22. in build_object_lists() you're parsing output of pg_restore -l.
    in the parse code, you assume that object type is always /\S+/,
    which is not true - for example: FK CONSTRAINT
-   #NOTE: Search for any combination of capital letters and spaces? 
-   # Make list of known types and match on them?
+   # Not currently an issue since none of the things I want to match on are multiple words.
+   # Constraints are containted in the table dump which uses pg_dump anyway.
+   # TODO: Search for any combination of capital letters and spaces? 
+   # TODO: Make list of known types and match on them?
 
 24. =$ perl ../getddl.pl --dbname depesz --getall
 Creating temp dump...

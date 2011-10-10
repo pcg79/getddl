@@ -1,6 +1,10 @@
-Order of PG Restore -l for table/view
-((TABLE -> ACL) -> (VIEW -> ACL)) -> CONSTRAINT -> INDEX -> RULE -> TRIGGER
+Order of PG Restore -l
+(SCHEMA -> COMMENT -> ACL) -> (PROCEDURAL LANGUAGE) -> TYPE -> (FUNCTION -> ACL) -> AGGREGATE
+    ((TABLE -> COMMENT -> SEQUENCE?-> ACL) -> (VIEW -> ACL)) -> DEFAULT? -> CONSTRAINT -> INDEX -> RULE -> TRIGGER -> FK CONSTRAINT
 
 Example:
 /opt/OMNIperl/bin/perl getddl.pl --hostname=core-0-5 --ddlbase=/home/keith/ddl --getall --dbname=pgods --sqldump --n=keith
+
+dbi_link
+59449; 2620 83715 TRIGGER avail manage_check_jobs postgres
 
