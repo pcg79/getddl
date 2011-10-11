@@ -43,7 +43,7 @@ set_config();
 create_dirs();
 my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXX', 
                                     SUFFIX => '.tmp',
-                                    DIR => $O->{'basedir'});
+                                    TMPDIR => 1);
 
 print "Creating temp dump...\n";
 create_temp_dump();
@@ -593,7 +593,7 @@ sub create_ddl_files {
     my $fulldestdir = create_dirs($destdir);
     my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXXX', 
                                         SUFFIX => '.tmp',
-                                        DIR => $O->{'basedir'});
+                                        TMPDIR => 1);
     
     my $list_file_contents = "";
      
@@ -607,14 +607,14 @@ sub create_ddl_files {
             $funcname = substr($t->{'name'}, 0, index($t->{'name'}, "\("));
             my $schemafile = $t->{'schema'};
             my $namefile = $funcname;
-            $schemafile =~ s/\W/-/g;
-            $namefile =~ s/\W/-/g;
+            $schemafile =~ s/(\W)/sprintf(",%02x", ord $1)/ge;;
+            $namefile =~ s/(\W)/sprintf(",%02x", ord $1)/ge;;
             $fqfn = File::Spec->catfile($fulldestdir, "$schemafile.$namefile");
         } else {
             my $schemafile = $t->{'schema'};
             my $namefile = $t->{'name'};
-            $schemafile =~ s/\W/-/g;
-            $namefile =~ s/\W/-/g;
+            $schemafile =~ s/(\W)/sprintf(",%02x", ord $1)/ge;;
+            $namefile =~ s/(\W)/sprintf(",%02x", ord $1)/ge;;
             $fqfn = File::Spec->catfile($fulldestdir, "$schemafile.$namefile");
         }
         
@@ -722,8 +722,10 @@ sub show_help_and_die {
         $PROGRAM_NAME [options]
         
     Notes:
-        For all options that use an external file list, separate each item in the file by a newline.
-        If no schema name is given in an object filter, it will match across all schemas requested in the export.
+        - For all options that use an external file list, separate each item in the file by a newline.
+        - If no schema name is given in an object filter, it will match across all schemas requested in the export.
+        - If a special character is used in an object name, it will be replaced with a comma followed by its hexcode
+            Ex: table|name becomes table,7cname.sql
  	
  	Options:
         [ database connection ]
