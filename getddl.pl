@@ -25,7 +25,7 @@ my ($excludeschema_dump, $includeschema_dump, $excludetable_dump, $includetable_
 my (@includeview, @excludeview);
 my (@includefunction, @excludefunction);
 my (@includeowner, @excludeowner);
-my (@tablelist, @viewlist, @functionlist, @acl_list);
+my (@tablelist, @viewlist, @functionlist, @typelist, @acl_list, @commentlist);
 
 # For future svn stuff
 #my (@to_commit, @to_add);
@@ -66,6 +66,11 @@ if (@functionlist) {
     print "Creating function ddl files...\n";
     create_ddl_files(\@functionlist, "functions"); 
 }    
+
+if (@typelist) {
+    print "Creating type ddl files...\n";
+    create_ddl_files(\@typelist, "types");
+}
 
 print "Creating pg_dump file...\n";
 if ($O->{sqldump}) {
@@ -110,6 +115,7 @@ sub get_options {
         'gettables!',
         'getviews!',
         'getfuncs!',
+        'gettypes!',
         'getall!',
         'sqldump!',
         'N=s',
@@ -162,15 +168,16 @@ sub set_config {
         $ENV{PGPASSFILE} = $O->{'pgpass'};
     }
 
-    if (!$O->{'gettables'} && !$O->{'getfuncs'} && !$O->{'getviews'}) {
+    if (!$O->{'gettables'} && !$O->{'getfuncs'} && !$O->{'getviews'} && !$O->{'gettypes'}) {
         if ($O->{'getall'}) {
             $O->{'gettables'} = 1;
             $O->{'getfuncs'} = 1;
             $O->{'getviews'} = 1;
+            $O->{'gettypes'} = 1;
         } elsif ($O->{'sqldump'}) {
-            die "Only pg_dump set. Please consider running pg_dump by itself instead.\n";    
+            die("NOTICE: Only pg_dump set. Please consider running pg_dump by itself instead.\n");
         } else {
-            die "No output options set. Please set one or more of the following: --gettables, --getviews, --getprocs. Or --getall for all 3.\n";
+            die("NOTICE: No output options set. Please set one or more of the following: --gettables, --getviews, --getprocs, --gettypes. Or --getall for all.\n");
         }
     }
 
@@ -530,6 +537,26 @@ sub build_object_lists {
             };
         }
         
+        if ($objtype eq "TYPE") {
+            push @typelist, {
+                "id" => $objid,
+                "type" => $objtype,
+                "schema" => $objschema,
+                "name" => $objname,
+                "owner" => $objowner,
+            };
+        }
+        
+        if ($objtype eq "COMMENT") {
+            push @commentlist, {
+                "id" => $objid,
+                "type" => $objtype,
+                "schema" => $objschema,
+                "name" => $objname,
+                "owner" => $objowner,
+            };
+        }
+        
         if ($objtype eq "ACL") {
             push @acl_list, {
                 "id" => $objid,
@@ -603,12 +630,17 @@ sub create_ddl_files {
         } else {
             # TODO this is a mess but, amazingly, it works. try and tidy up if possible.
             # put all functions with same basename in the same output file 
-            # along with each function's ACL following just after it.
+            # along with each function's ACL & Comment following just after it.
             if ($t->{'type'} eq "FUNCTION") {
                 my @dupe_objlist = @objlist;
                 my $dupefunc;
                 # add to current file output if first found of object has an ACL
                 foreach (@acl_list) {
+                    if ($_->{'name'} eq $t->{'name'}) {
+                        $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
+                    }
+                }
+                foreach (@commentlist) {
                     if ($_->{'name'} eq $t->{'name'}) {
                         $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
                     }
@@ -626,6 +658,11 @@ sub create_ddl_files {
                                 $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
                             }
                         }
+                        foreach (@commentlist) {
+                            if ($_->{'name'} eq $d->{'name'}) {
+                                $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
+                            }
+                        }                        
                         # if duplicate found, remove from main @objlist so it doesn't get output again.
                         splice(@objlist,$offset,1)
                     }
@@ -638,6 +675,11 @@ sub create_ddl_files {
                         $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
                     }
                 }
+                foreach (@commentlist) {
+                    if ($_->{'name'} eq $t->{'name'}) {
+                        $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
+                    }
+                }       
             }
             open LIST, ">", $tmp_ddl_file or die_cleanup("could not create required temp file [$tmp_ddl_file]: $!\n");
             print "$list_file_contents\n";
@@ -675,6 +717,7 @@ sub show_help_and_die {
  	        printf STDERR $format, @args;
  	    }
  	    print STDERR <<_EOH_;
+ 	    
     Syntax:
         $PROGRAM_NAME [options]
         
@@ -700,7 +743,8 @@ sub show_help_and_die {
         --gettables         : export table ddl. Each file includes table's indexes, constraints, sequences, comments, rules and triggers
         --getviews          : export view ddl
         --getfuncs          : export function ddl. Overloaded functions will all be in the same base filename
-        --getall            : gets all tables, views and functions. Shortcut to having to set all 3 of the above
+        --gettypes          : export custom types.
+        --getall            : gets all tables, views, functions and types. Shortcut to having to set all set.
         --N                 : csv list of schemas to EXCLUDE
         --N_file            : path to a file listing schemas to EXCLUDE.
         --n                 : csv list of schemas to INCLUDE
