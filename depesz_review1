@@ -46,12 +46,4 @@ use $self (object itself) as %cfg.
    # TODO: Search for any combination of capital letters and spaces? 
    # TODO: Make list of known types and match on them?
 
-24. =$ perl ../getddl.pl --dbname depesz --getall
-Creating temp dump...
-pg_dump  -s -Fc -U postgres -p 5920  depesz > /tmp/pgdump1318008579.30788
-Building object lists...
-Use of uninitialized value $objtype in string eq at ../getddl.pl line 416.
-Use of uninitialized value $objtype in string eq at ../getddl.pl line 427.
-Use of uninitialized value $objtype in string eq at ../getddl.pl line 438.
-Use of uninitialized value $objtype in string eq at ../getddl.pl line 449.
-# NOTE: Ask depesz to do this one again. Not sure if previous port issue or something else
+

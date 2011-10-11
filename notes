@@ -5,6 +5,4 @@ Order of PG Restore -l
 Example:
 /opt/OMNIperl/bin/perl getddl.pl --hostname=core-0-5 --ddlbase=/home/keith/ddl --getall --dbname=pgods --sqldump --n=keith
 
-dbi_link
-59449; 2620 83715 TRIGGER avail manage_check_jobs postgres
 

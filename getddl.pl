@@ -574,13 +574,21 @@ sub create_ddl_files {
     
     foreach my $t (@objlist) {
 
-        print "objlist: $t->{id} $t->{type} $t->{schema} $t->{name} $t->{owner}\n";
+        print "restore item: $t->{id} $t->{type} $t->{schema} $t->{name} $t->{owner}\n";
         
         if ($t->{'name'} =~ /\(.*\)/) {
             $funcname = substr($t->{'name'}, 0, index($t->{'name'}, "\("));
-            $fqfn = "$fulldestdir/$t->{schema}.$funcname";
+            my $schemafile = $t->{'schema'};
+            my $namefile = $funcname;
+            $schemafile =~ s/\W/-/g;
+            $namefile =~ s/\W/-/g;
+            $fqfn = File::Spec->catfile($fulldestdir, "$schemafile.$namefile");
         } else {
-            $fqfn = "$fulldestdir/$t->{schema}.$t->{name}";
+            my $schemafile = $t->{'schema'};
+            my $namefile = $t->{'name'};
+            $schemafile =~ s/\W/-/g;
+            $namefile =~ s/\W/-/g;
+            $fqfn = File::Spec->catfile($fulldestdir, "$schemafile.$namefile");
         }
         
         $list_file_contents = "$t->{id} $t->{type} $t->{schema} $t->{name} $t->{owner}\n";
@@ -598,15 +606,14 @@ sub create_ddl_files {
             # along with each function's ACL following just after it.
             if ($t->{'type'} eq "FUNCTION") {
                 my @dupe_objlist = @objlist;
+                my $dupefunc;
                 # add to current file output if first found of object has an ACL
                 foreach (@acl_list) {
                     if ($_->{'name'} eq $t->{'name'}) {
                         $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
                     }
                 }
-                my $dupefunc;
-                
-                # loop through dupe of objlist to find dupes (overloads)
+                # loop through dupe of objlist to find overloads
                 foreach my $d (@dupe_objlist) {
                     $dupefunc = substr($d->{'name'}, 0, index($d->{'name'}, "\("));
                     # if there is another function with the same name, but different signature, as this one ($t)...
@@ -624,6 +631,7 @@ sub create_ddl_files {
                     }
                 }
             } else {
+                
                 # add to current file output if this object has an ACL
                 foreach (@acl_list) {
                     if ($_->{'name'} eq $t->{'name'}) {
@@ -635,6 +643,7 @@ sub create_ddl_files {
             print "$list_file_contents\n";
             print LIST "$list_file_contents";
             $restorecmd = "$O->{pgrestore} -s -L $tmp_ddl_file -f $fqfn.sql $dmp_tmp_file";
+            ##print "$restorecmd\n";
             system $restorecmd;
             close LIST;
         }
