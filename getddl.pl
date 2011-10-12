@@ -416,15 +416,34 @@ sub build_object_lists {
         if (/^;/) {
             next;
         }
-        if (/[\(\)]/) {
-            ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s(.*\))\s(\S+)/;
-        } else {
+        my ($typetest) = /\d+;\s\d+\s\d+\s+(.*)/;
+        if ($typetest =~ /^TABLE|VIEW|TYPE|ACL/) {
             ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)/;
-        }
-        if (!$objtype) {
+        } elsif ($typetest =~ /^FUNCTION/) {
+            ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s(.*\))\s(\S+)/;
+        } elsif ($typetest =~ /^COMMENT/) {
+            my ($objsubtype) = /\d+;\s\d+\s\d+\s\S+\s\S+\s(\S+)/;
+            print "sub $objsubtype\n";
+            if ($objsubtype eq "FUNCTION") {
+                ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s\S+\s(.*\))\s(\S+)/;
+            } else {
+                next;
+            }
+        } else {
             next;
         }
-        #print "build list: \$objid: $objid, \$objtype : $objtype, \$objschema : $objschema, \$objname : $objname, \$objowner : $objowner\n";
+        #if (/[\(\)]/) {
+        #    ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s(.*\))\s(\S+)/;
+        #} else {
+        #    ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)/;
+        #}
+        
+        ## Leave this test here. Not sure if bug it fixed is gone
+        #if (!$objtype) {
+        #    next;
+        #}
+        
+        print "build list: \$objid: $objid, \$objtype : $objtype, \$objschema : $objschema, \$objname : $objname, \$objowner : $objowner\n";
         # TODO add in object regex filter options here
         # TODO need to account for custom TYPES (see dblink schema)
         # TODO need to account for COMMENTS on objects other than tables
@@ -548,6 +567,7 @@ sub build_object_lists {
         }
         
         if ($objtype eq "COMMENT") {
+            
             push @commentlist, {
                 "id" => $objid,
                 "type" => $objtype,
@@ -572,7 +592,6 @@ sub build_object_lists {
 sub create_dirs {
     my $newdir = shift @_;
     
-    #my $destdir = "$O->{basedir}/$newdir";
     my $destdir = File::Spec->catdir($O->{'basedir'}, $newdir);
     if (!-e $destdir) {
        eval { mkpath($destdir) };
@@ -594,9 +613,7 @@ sub create_ddl_files {
     my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXXX', 
                                         SUFFIX => '.tmp',
                                         TMPDIR => 1);
-    
     my $list_file_contents = "";
-     
     my $offset = 0;
     
     foreach my $t (@objlist) {
