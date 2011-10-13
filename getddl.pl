@@ -41,9 +41,10 @@ my $O = get_options();
 set_config();
 
 create_dirs();
+# TODO change to TMPDIR option. 
 my $dmp_tmp_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXX', 
                                     SUFFIX => '.tmp',
-                                    TMPDIR => 1);
+                                    DIR => $O->{'basedir'});
 
 print "Creating temp dump...\n";
 create_temp_dump();
@@ -407,7 +408,7 @@ sub build_regex_filters {
 
 sub build_object_lists {
     my $restorecmd = "$O->{pgrestore} -l $dmp_tmp_file";
-    my ($objid, $objtype, $objschema, $objname_owner, $objname, $objowner, $key, $value);
+    my ($objid, $objtype, $objschema, $objsubtype, $objname, $objowner, $key, $value);
     
     
     RESTORE_LABEL: foreach (`$restorecmd`) {
@@ -422,15 +423,57 @@ sub build_object_lists {
         } elsif ($typetest =~ /^FUNCTION/) {
             ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s(.*\))\s(\S+)/;
         } elsif ($typetest =~ /^COMMENT/) {
-            my ($objsubtype) = /\d+;\s\d+\s\d+\s\S+\s\S+\s(\S+)/;
-            print "sub $objsubtype\n";
+            
+            ($objsubtype) = /\d+;\s\d+\s\d+\s\S+\s\S+\s(\S+)/;
+            ##print "sub $objsubtype\n";
+            
             if ($objsubtype eq "FUNCTION") {
                 ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s\S+\s(.*\))\s(\S+)/;
+                #split out base name
+                
+                ##print "$objname\n";
+                #split out arguement list
+                my $args = substr($objname, index($objname, "\(")+1, length($objname)-index($objname, "\(")-2);
+                next RESTORE_LABEL if (!$args);
+                $objname = substr($objname, 0, index($objname, "\(")+1);
+                ##print "$objname\n";
+                ##print "args: $args\n";
+                ##print "index: " . index($objname, "\(") . "\n";
+                ##print "length: ".length($objname)."\n";
+                if ($args =~ /,/) {
+                    my @args = split(', ', $args);
+                    my $count = 0;
+                    foreach (@args) {
+                        # remove variable name if exists in function definition
+                        if (/\S+\s(.*)/) {
+                  ##          print "length args: ".scalar(@args)."\n";
+                   ##         print "arg: $1\n";
+                            $objname .= $1;
+                            if ($count < scalar(@args)-1) {
+                                $objname .= ", ";
+                            }
+                        } else {
+                            $objname .= $_;
+                        }
+                        $count++;
+                    }
+                } else {
+                    # remove variable name if exists in function definition
+                    if ($args =~ /\S+\s(.*)/) {
+                        $objname .= $1;
+                    } else {
+                        $objname .= $args;
+                    }
+                }
+                
+                $objname .= ")";
+               # print "new: $objname\n";
             } else {
-                next;
+                ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s\S+\s(\S+)\s(\S+)/;
+                next RESTORE_LABEL;
             }
         } else {
-            next;
+            next RESTORE_LABEL;
         }
         #if (/[\(\)]/) {
         #    ($objid, $objtype, $objschema, $objname, $objowner) = /(\d+;\s\d+\s\d+)\s(\S+)\s(\S+)\s(.*\))\s(\S+)/;
@@ -443,10 +486,9 @@ sub build_object_lists {
         #    next;
         #}
         
-        print "build list: \$objid: $objid, \$objtype : $objtype, \$objschema : $objschema, \$objname : $objname, \$objowner : $objowner\n";
+       ## print "build list: \$objid: $objid, \$objtype : $objtype, \$objschema : $objschema, \$objname : $objname, \$objowner : $objowner\n";
         # TODO add in object regex filter options here
-        # TODO need to account for custom TYPES (see dblink schema)
-        # TODO need to account for COMMENTS on objects other than tables
+
         if (@excludeowner) {
             foreach (@excludeowner) {
                 next RESTORE_LABEL if ($_ eq $objowner);
@@ -524,19 +566,13 @@ sub build_object_lists {
                 my $found = 0;
                 foreach (@includefunction) {
                     if ($_ =~ /\./) {
-                        #print "includefunction schema: $_\n";
-                        #print "restore function: $objschema.$objname\n";
                          if($_ ne "$objschema.$objname") {
-                         #   print "next called\n";
                             next;
                          } else {
-                          #  print "function include match\n";
                             $found = 1;
                          }
                     } else {
                         if ($_ ne $objname) {
-                            #print "function name: $_\n";
-                            #print "restore function: $objschema.$objname\n";
                             next;
                         } else {
                             $found = 1;
@@ -572,6 +608,7 @@ sub build_object_lists {
                 "id" => $objid,
                 "type" => $objtype,
                 "schema" => $objschema,
+                "subtype" => $objsubtype,
                 "name" => $objname,
                 "owner" => $objowner,
             };
@@ -612,7 +649,7 @@ sub create_ddl_files {
     my $fulldestdir = create_dirs($destdir);
     my $tmp_ddl_file = File::Temp->new( TEMPLATE => 'getddl_XXXXXXXX', 
                                         SUFFIX => '.tmp',
-                                        TMPDIR => 1);
+                                        DIR => $O->{'basedir'});
     my $list_file_contents = "";
     my $offset = 0;
     
@@ -624,12 +661,14 @@ sub create_ddl_files {
             $funcname = substr($t->{'name'}, 0, index($t->{'name'}, "\("));
             my $schemafile = $t->{'schema'};
             my $namefile = $funcname;
+            # account for special characters in object name
             $schemafile =~ s/(\W)/sprintf(",%02x", ord $1)/ge;;
             $namefile =~ s/(\W)/sprintf(",%02x", ord $1)/ge;;
             $fqfn = File::Spec->catfile($fulldestdir, "$schemafile.$namefile");
         } else {
             my $schemafile = $t->{'schema'};
             my $namefile = $t->{'name'};
+            # account for special characters in object name
             $schemafile =~ s/(\W)/sprintf(",%02x", ord $1)/ge;;
             $namefile =~ s/(\W)/sprintf(",%02x", ord $1)/ge;;
             $fqfn = File::Spec->catfile($fulldestdir, "$schemafile.$namefile");
@@ -659,7 +698,7 @@ sub create_ddl_files {
                 }
                 foreach (@commentlist) {
                     if ($_->{'name'} eq $t->{'name'}) {
-                        $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
+                        $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{subtype} $_->{name} $_->{owner}\n";
                     }
                 }
                 # loop through dupe of objlist to find overloads
@@ -677,7 +716,7 @@ sub create_ddl_files {
                         }
                         foreach (@commentlist) {
                             if ($_->{'name'} eq $d->{'name'}) {
-                                $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
+                                $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{subtype} $_->{name} $_->{owner}\n";
                             }
                         }                        
                         # if duplicate found, remove from main @objlist so it doesn't get output again.
@@ -694,7 +733,7 @@ sub create_ddl_files {
                 }
                 foreach (@commentlist) {
                     if ($_->{'name'} eq $t->{'name'}) {
-                        $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{name} $_->{owner}\n";
+                        $list_file_contents .= "$_->{id} $_->{type} $_->{schema} $_->{subtype} $_->{name} $_->{owner}\n";
                     }
                 }       
             }
@@ -743,6 +782,7 @@ sub show_help_and_die {
         - If no schema name is given in an object filter, it will match across all schemas requested in the export.
         - If a special character is used in an object name, it will be replaced with a comma followed by its hexcode
             Ex: table|name becomes table,7cname.sql
+        - Comments/Descriptions on any object should be included in the export file. If you see any missing, please contact the author
  	
  	Options:
         [ database connection ]
@@ -760,7 +800,7 @@ sub show_help_and_die {
         
         [ filters ]
         --gettables         : export table ddl. Each file includes table's indexes, constraints, sequences, comments, rules and triggers
-        --getviews          : export view ddl
+        --getviews          : export view ddl 
         --getfuncs          : export function ddl. Overloaded functions will all be in the same base filename
         --gettypes          : export custom types.
         --getall            : gets all tables, views, functions and types. Shortcut to having to set all set.
