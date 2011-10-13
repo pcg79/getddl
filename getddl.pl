@@ -178,7 +178,7 @@ sub set_config {
         } elsif ($O->{'sqldump'}) {
             die("NOTICE: Only pg_dump set. Please consider running pg_dump by itself instead.\n");
         } else {
-            die("NOTICE: No output options set. Please set one or more of the following: --gettables, --getviews, --getprocs, --gettypes. Or --getall for all.\n");
+            die("NOTICE: No output options set. Please set one or more of the following: --gettables, --getviews, --getprocs, --gettypes. Or --getall for all. Use --help to show all options\n");
         }
     }
 
@@ -778,6 +778,7 @@ sub show_help_and_die {
         $PROGRAM_NAME [options]
         
     Notes:
+        - ONLY OPTIONS SHOWN HERE ARE READY FOR TESTING. Others seen in source may not work!
         - For all options that use an external file list, separate each item in the file by a newline.
         - If no schema name is given in an object filter, it will match across all schemas requested in the export.
         - If a special character is used in an object name, it will be replaced with a comma followed by its hexcode
